@@ -109,6 +109,8 @@ def apply_styles() -> None:
             background: rgba(7, 16, 32, 0.85) !important;
             border: 1px solid rgba(125, 162, 206, 0.4) !important;
             border-radius: 0.6rem !important;
+            min-width: 2.3rem !important;
+            min-height: 2.3rem !important;
         }
 
         button[data-testid="collapsedControl"] svg,
@@ -329,9 +331,20 @@ def apply_styles() -> None:
                 max-width: 100% !important;
             }
             [data-testid="stSidebar"] {
-                width: min(78vw, 320px) !important;
-                min-width: min(78vw, 320px) !important;
-                max-width: min(78vw, 320px) !important;
+                width: auto !important;
+                min-width: 0 !important;
+                max-width: 100vw !important;
+            }
+            [data-testid="stSidebar"][aria-expanded="true"] {
+                width: min(88vw, 22rem) !important;
+                min-width: min(88vw, 22rem) !important;
+                max-width: min(88vw, 22rem) !important;
+            }
+            button[data-testid="collapsedControl"] {
+                position: fixed !important;
+                top: 0.56rem !important;
+                left: 0.56rem !important;
+                z-index: 1002 !important;
             }
             .block-container [data-testid="stHorizontalBlock"] {
                 flex-direction: column !important;
@@ -526,20 +539,19 @@ left, right = st.columns([1.6, 1], gap="large")
 with left:
     st.markdown('<div class="brand-kicker">AI CARTOONIZATION STUDIO</div>', unsafe_allow_html=True)
     st.markdown(
-        '<h1 class="hero-title">Turn everyday photos into clean, publication-ready cartoon art.</h1>',
+        '<h1 class="hero-title">Turn photos into crisp, studio-style cartoon visuals.</h1>',
         unsafe_allow_html=True,
     )
     st.markdown(
-        '<p class="hero-sub">Artify AI helps creators and teams convert portraits or product '
-        'shots into polished cartoon visuals with a reliable, repeatable workflow.</p>',
+        '<p class="hero-sub">A clean workflow for creators: upload, stylize, preview, and export in minutes.</p>',
         unsafe_allow_html=True,
     )
     st.markdown(
         """
         <div class="stat-row">
-            <span class="stat-chip">High-resolution exports</span>
-            <span class="stat-chip">Fast style presets</span>
-            <span class="stat-chip">Secure account workflow</span>
+            <span class="stat-chip">One-click styles</span>
+            <span class="stat-chip">HD exports</span>
+            <span class="stat-chip">Private workspace</span>
         </div>
         """,
         unsafe_allow_html=True,
@@ -557,37 +569,27 @@ with left:
         else:
             st.warning("Please sign in from the sidebar to continue.")
 
-    st.caption("Optimized for web-ready visuals and social media outputs.")
+    st.caption("Built for fast social and portfolio-ready outputs.")
 
 with right:
     st.markdown(
         """
         <div class="spotlight-card">
-            <h4>What you can expect</h4>
-            <p>Upload, apply style, compare output, and download in one flow. The dashboard keeps your account, uploads, and payments organized in one place.</p>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-    st.markdown("")
-    st.markdown(
-        """
-        <div class="spotlight-card">
-            <h4>Core quality goals</h4>
-            <p>Edge-preserving smoothing, vibrant but balanced tones, and high-resolution exports suitable for digital publishing.</p>
+            <h4>Quick flow</h4>
+            <p>1. Upload image<br>2. Apply style preset<br>3. Export final artwork</p>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
-st.markdown('<div class="section-title">Why teams choose Artify AI</div>', unsafe_allow_html=True)
-f1, f2, f3 = st.columns(3, gap="medium")
+st.markdown('<div class="section-title">Highlights</div>', unsafe_allow_html=True)
+f1, f2 = st.columns(2, gap="medium")
 with f1:
     st.markdown(
         """
         <div class="feature-card">
-            <h4>Consistent outputs</h4>
-            <p>Keep visual quality stable across portraits, product shots, and campaign assets.</p>
+            <h4>Consistent quality</h4>
+            <p>Stable visual style for portraits, products, and campaigns.</p>
         </div>
         """,
         unsafe_allow_html=True,
@@ -596,18 +598,8 @@ with f2:
     st.markdown(
         """
         <div class="feature-card">
-            <h4>Faster creative cycles</h4>
-            <p>Spend less time editing manually and more time testing style directions.</p>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-with f3:
-    st.markdown(
-        """
-        <div class="feature-card">
-            <h4>Security in workspace</h4>
-            <p>Your account workflow is tied to local storage and your own database setup.</p>
+            <h4>Faster iterations</h4>
+            <p>Test style directions quickly with less manual editing.</p>
         </div>
         """,
         unsafe_allow_html=True,

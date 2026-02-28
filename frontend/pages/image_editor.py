@@ -101,6 +101,8 @@ def apply_styles() -> None:
             background: rgba(7, 16, 32, 0.85) !important;
             border: 1px solid rgba(125, 162, 206, 0.4) !important;
             border-radius: 0.6rem !important;
+            min-width: 2.3rem !important;
+            min-height: 2.3rem !important;
         }
 
         button[data-testid="collapsedControl"] svg,
@@ -221,9 +223,20 @@ def apply_styles() -> None:
                 max-width: 100% !important;
             }
             [data-testid="stSidebar"] {
-                width: min(78vw, 320px) !important;
-                min-width: min(78vw, 320px) !important;
-                max-width: min(78vw, 320px) !important;
+                width: auto !important;
+                min-width: 0 !important;
+                max-width: 100vw !important;
+            }
+            [data-testid="stSidebar"][aria-expanded="true"] {
+                width: min(88vw, 22rem) !important;
+                min-width: min(88vw, 22rem) !important;
+                max-width: min(88vw, 22rem) !important;
+            }
+            button[data-testid="collapsedControl"] {
+                position: fixed !important;
+                top: 0.56rem !important;
+                left: 0.56rem !important;
+                z-index: 1002 !important;
             }
             .block-container [data-testid="stHorizontalBlock"] {
                 flex-direction: column !important;
