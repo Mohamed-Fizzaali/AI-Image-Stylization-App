@@ -1,3 +1,4 @@
+import base64
 import sys
 from pathlib import Path
 
@@ -20,23 +21,26 @@ def apply_styles() -> None:
         @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap');
 
         :root {
-            --bg-top: #050d1e;
-            --bg-mid: #09182d;
-            --bg-bottom: #0f1f3a;
+            --bg-top: #06101f;
+            --bg-mid: #0a1b31;
+            --bg-bottom: #102546;
             --ink-900: #eaf2ff;
             --ink-700: #c0cfe8;
             --ink-500: #8ea3c3;
-            --brand-800: #0d4f63;
-            --brand-700: #0e7490;
+            --brand-800: #0a4f66;
+            --brand-700: #0f7ea1;
             --brand-500: #22d3ee;
             --accent-500: #fb923c;
-            --card-bg: rgba(12, 24, 44, 0.78);
+            --card-bg: rgba(12, 24, 44, 0.8);
             --card-stroke: rgba(125, 162, 206, 0.24);
+            --focus-ring: #7fe3ff;
         }
 
-        html, body, [class*="css"] {
+        html, body, .stApp {
             font-family: "Manrope", "Segoe UI", sans-serif;
             color: var(--ink-700);
+            max-width: 100%;
+            overflow-x: hidden !important;
         }
 
         h1, h2, h3, h4, h5, h6 {
@@ -55,22 +59,6 @@ def apply_styles() -> None:
                 linear-gradient(160deg, var(--bg-top) 0%, var(--bg-mid) 46%, var(--bg-bottom) 100%) fixed;
         }
 
-        [data-testid="stAppViewContainer"],
-        [data-testid="stMain"],
-        [data-testid="stHeader"],
-        [data-testid="stToolbar"] {
-            background: transparent !important;
-        }
-
-        [data-testid="stAppViewContainer"] > .main {
-            background: transparent !important;
-        }
-
-        html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stAppViewContainer"] > .main {
-            max-width: 100%;
-            overflow-x: hidden !important;
-        }
-
         .stApp {
             background:
                 radial-gradient(circle at -2% -8%, rgba(34, 211, 238, 0.22), transparent 34%),
@@ -82,27 +70,9 @@ def apply_styles() -> None:
 
         [data-testid="stSidebar"] {
             border-right: 1px solid rgba(125, 162, 206, 0.24);
-            background: linear-gradient(180deg, rgba(5, 13, 31, 0.98) 0%, rgba(12, 28, 52, 0.96) 100%);
+            background: linear-gradient(180deg, rgba(5, 13, 31, 0.97) 0%, rgba(12, 28, 52, 0.95) 100%);
             color: var(--ink-700);
             backdrop-filter: blur(10px);
-        }
-
-        [data-testid="stSidebar"] * {
-            color: var(--ink-700);
-        }
-
-        [data-testid="stSidebar"] h1,
-        [data-testid="stSidebar"] h2,
-        [data-testid="stSidebar"] h3,
-        [data-testid="stSidebar"] h4,
-        [data-testid="stSidebar"] h5,
-        [data-testid="stSidebar"] h6 {
-            color: var(--ink-900);
-        }
-
-        [data-testid="stSidebar"] [data-testid="stRadio"] label p,
-        [data-testid="stSidebar"] .stCaptionContainer {
-            color: var(--ink-700) !important;
         }
 
         button[data-testid="collapsedControl"] {
@@ -129,6 +99,43 @@ def apply_styles() -> None:
             max-width: 1180px;
         }
 
+        .panel-card {
+            background: linear-gradient(165deg, rgba(12, 28, 52, 0.88) 0%, rgba(8, 20, 40, 0.9) 100%);
+            border: 1px solid rgba(92, 142, 198, 0.3);
+            border-radius: 1.2rem;
+            padding: 1.05rem;
+            box-shadow: 0 14px 28px rgba(2, 8, 28, 0.34);
+            animation: fadeInUp 380ms ease both;
+            position: relative;
+            overflow: hidden;
+            margin-bottom: 0.9rem;
+        }
+
+        .panel-card::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, rgba(34, 211, 238, 0.85), rgba(59, 130, 246, 0.45), transparent);
+        }
+
+        .panel-title {
+            margin: 0;
+            color: var(--ink-900);
+            font-size: 1.08rem;
+            font-weight: 800;
+            letter-spacing: -0.02em;
+        }
+
+        .panel-sub {
+            margin: 0.25rem 0 0.8rem 0;
+            color: var(--ink-500);
+            font-size: 0.86rem;
+            line-height: 1.38;
+        }
+
         .side-head {
             font-size: 1.1rem;
             font-weight: 800;
@@ -143,25 +150,42 @@ def apply_styles() -> None:
             font-size: 0.84rem;
         }
 
-        form[data-testid="stForm"] {
+        form {
             background: rgba(8, 19, 36, 0.72);
             border: 1px solid rgba(125, 162, 206, 0.24);
             border-radius: 1rem;
             padding: 0.85rem 0.85rem 0.55rem 0.85rem;
         }
 
-        [data-testid="stTextInput"] input {
+        input[type="text"],
+        input[type="password"],
+        input[type="email"] {
             border-radius: 0.72rem;
             border: 1px solid rgba(125, 162, 206, 0.32);
             background: rgba(5, 13, 31, 0.74);
             color: var(--ink-900);
         }
 
-        [data-testid="stTextInput"] input::placeholder {
+        input[type="text"]::placeholder,
+        input[type="password"]::placeholder,
+        input[type="email"]::placeholder {
             color: var(--ink-500);
         }
 
-        [data-testid="stTextInput"] input:focus {
+        input[type="text"]:focus-visible,
+        input[type="password"]:focus-visible,
+        input[type="email"]:focus-visible,
+        textarea:focus-visible,
+        button:focus-visible,
+        a:focus-visible {
+            outline: 2px solid var(--focus-ring) !important;
+            outline-offset: 2px !important;
+            box-shadow: none !important;
+        }
+
+        input[type="text"]:focus,
+        input[type="password"]:focus,
+        input[type="email"]:focus {
             border-color: rgba(34, 211, 238, 0.75);
             box-shadow: 0 0 0 1px rgba(34, 211, 238, 0.35);
         }
@@ -186,24 +210,25 @@ def apply_styles() -> None:
             font-weight: 800;
             color: var(--ink-900);
             letter-spacing: -0.03em;
-            margin: 0 0 0.8rem 0;
+            margin: 0 0 0.62rem 0;
             white-space: normal !important;
             word-break: break-word;
+            max-width: 16ch;
         }
 
         .hero-sub {
             color: var(--ink-700);
-            font-size: 1.04rem;
-            line-height: 1.65;
-            margin-bottom: 1rem;
-            max-width: 60ch;
+            font-size: 1.02rem;
+            line-height: 1.45;
+            margin-bottom: 0.82rem;
+            max-width: 48ch;
         }
 
         .stat-row {
             display: flex;
             flex-wrap: wrap;
             gap: 0.45rem;
-            margin-bottom: 1rem;
+            margin-bottom: 0.9rem;
         }
 
         .stat-chip {
@@ -219,37 +244,119 @@ def apply_styles() -> None:
         }
 
         .spotlight-card {
-            background: var(--card-bg);
-            border: 1px solid var(--card-stroke);
-            border-radius: 1.05rem;
-            padding: 1.1rem 1.15rem;
+            background: linear-gradient(165deg, rgba(12, 28, 52, 0.88) 0%, rgba(8, 20, 40, 0.9) 100%);
+            border: 1px solid rgba(92, 142, 198, 0.3);
+            border-radius: 1.2rem;
+            padding: 1rem 1.05rem;
             backdrop-filter: blur(4px);
-            box-shadow: 0 12px 26px rgba(15, 23, 42, 0.05);
+            box-shadow: 0 14px 28px rgba(2, 8, 28, 0.34);
             animation: fadeInUp 380ms ease both;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .spotlight-card::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, rgba(34, 211, 238, 0.85), rgba(59, 130, 246, 0.45), transparent);
         }
 
         .spotlight-card h4 {
             margin: 0 0 0.35rem 0;
             color: var(--ink-900);
-            font-size: 1.06rem;
+            font-size: 1rem;
         }
 
         .spotlight-card p {
             margin: 0;
             color: var(--ink-700);
-            font-size: 0.92rem;
-            line-height: 1.5;
+            font-size: 0.88rem;
+            line-height: 1.42;
+        }
+
+        .proof-card {
+            background: linear-gradient(165deg, rgba(9, 22, 42, 0.86) 0%, rgba(7, 18, 36, 0.88) 100%);
+            border: 1px solid rgba(92, 142, 198, 0.28);
+            border-radius: 1rem;
+            padding: 0.8rem;
+            box-shadow: 0 12px 22px rgba(2, 8, 28, 0.3);
+            animation: fadeInUp 440ms ease both;
+        }
+
+        .proof-image {
+            width: 100%;
+            aspect-ratio: 16 / 10;
+            border-radius: 0.72rem;
+            border: 1px solid rgba(125, 162, 206, 0.34);
+            margin-bottom: 0.62rem;
+        }
+
+        .proof-img-tag {
+            width: 100%;
+            aspect-ratio: 16 / 10;
+            object-fit: cover;
+            border-radius: 0.72rem;
+            border: 1px solid rgba(125, 162, 206, 0.34);
+            margin-bottom: 0.62rem;
+            display: block;
+        }
+
+        .proof-before {
+            background:
+                radial-gradient(circle at 35% 30%, rgba(160, 196, 255, 0.45), transparent 36%),
+                linear-gradient(150deg, rgba(19, 35, 66, 1) 0%, rgba(10, 24, 46, 1) 100%);
+        }
+
+        .proof-after {
+            background:
+                radial-gradient(circle at 70% 24%, rgba(34, 211, 238, 0.42), transparent 34%),
+                linear-gradient(150deg, rgba(18, 75, 104, 0.95) 0%, rgba(12, 42, 79, 0.98) 100%);
+        }
+
+        .proof-alt {
+            background:
+                radial-gradient(circle at 28% 68%, rgba(251, 146, 60, 0.38), transparent 36%),
+                linear-gradient(140deg, rgba(74, 46, 108, 0.95) 0%, rgba(18, 33, 74, 0.98) 100%);
+        }
+
+        .proof-card h4 {
+            margin: 0 0 0.2rem 0;
+            font-size: 0.98rem;
+            color: var(--ink-900);
+        }
+
+        .proof-card p {
+            margin: 0;
+            font-size: 0.84rem;
+            color: var(--ink-700);
+            line-height: 1.38;
         }
 
         .feature-card {
-            background: var(--card-bg);
-            border: 1px solid var(--card-stroke);
-            border-radius: 1.05rem;
-            padding: 1.02rem 1.08rem;
-            min-height: 125px;
+            background: linear-gradient(165deg, rgba(9, 22, 42, 0.86) 0%, rgba(7, 18, 36, 0.88) 100%);
+            border: 1px solid rgba(92, 142, 198, 0.28);
+            border-radius: 1.2rem;
+            padding: 0.95rem 1rem;
+            min-height: 112px;
             transition: transform 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
-            box-shadow: 0 10px 22px rgba(15, 23, 42, 0.04);
+            box-shadow: 0 12px 22px rgba(2, 8, 28, 0.32);
             animation: fadeInUp 430ms ease both;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .feature-card::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 3px;
+            height: 100%;
+            background: linear-gradient(180deg, rgba(34, 211, 238, 0.85), rgba(59, 130, 246, 0.4));
         }
 
         .feature-card:hover {
@@ -260,21 +367,22 @@ def apply_styles() -> None:
 
         .feature-card h4 {
             color: var(--ink-900);
-            margin: 0 0 0.28rem 0;
+            margin: 0 0 0.24rem 0;
+            font-size: 1.1rem;
         }
 
         .feature-card p {
             color: var(--ink-700);
             margin: 0;
-            font-size: 0.9rem;
-            line-height: 1.45;
+            font-size: 0.86rem;
+            line-height: 1.4;
         }
 
         .section-title {
             margin-top: 0.3rem;
-            margin-bottom: 0.8rem;
+            margin-bottom: 0.65rem;
             color: var(--ink-900);
-            font-size: 1.22rem;
+            font-size: 1.08rem;
             font-weight: 800;
             letter-spacing: -0.02em;
         }
@@ -291,6 +399,11 @@ def apply_styles() -> None:
         button[data-testid="baseButton-primary"]:hover {
             filter: brightness(1.03);
             transform: translateY(-1px);
+        }
+
+        button[data-testid="baseButton-primary"]:active,
+        button[data-testid="baseButton-secondary"]:active {
+            transform: translateY(0);
         }
 
         button[data-testid="baseButton-secondary"] {
@@ -322,6 +435,14 @@ def apply_styles() -> None:
             }
         }
 
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                animation: none !important;
+                transition: none !important;
+                scroll-behavior: auto !important;
+            }
+        }
+
         @media (max-width: 900px) {
             .block-container {
                 padding-top: 0.85rem;
@@ -329,22 +450,6 @@ def apply_styles() -> None:
                 padding-left: 0.7rem;
                 padding-right: 0.7rem;
                 max-width: 100% !important;
-            }
-            [data-testid="stSidebar"] {
-                width: auto !important;
-                min-width: 0 !important;
-                max-width: 100vw !important;
-            }
-            [data-testid="stSidebar"][aria-expanded="true"] {
-                width: min(88vw, 22rem) !important;
-                min-width: min(88vw, 22rem) !important;
-                max-width: min(88vw, 22rem) !important;
-            }
-            button[data-testid="collapsedControl"] {
-                position: fixed !important;
-                top: 0.56rem !important;
-                left: 0.56rem !important;
-                z-index: 1002 !important;
             }
             .block-container [data-testid="stHorizontalBlock"] {
                 flex-direction: column !important;
@@ -364,31 +469,34 @@ def apply_styles() -> None:
                 min-width: 0 !important;
             }
             .hero-sub {
-                font-size: 0.88rem;
+                font-size: 0.95rem;
                 overflow-wrap: anywhere;
             }
             .hero-title {
-                font-size: clamp(1.35rem, 7.4vw, 1.72rem);
-                line-height: 1.12;
+                font-size: clamp(1.42rem, 6.2vw, 1.72rem);
+                line-height: 1.14;
                 overflow-wrap: anywhere;
             }
             .feature-card {
                 min-height: auto;
             }
             .spotlight-card,
-            .feature-card {
-                padding: 0.78rem 0.82rem;
+            .feature-card,
+            .panel-card,
+            .proof-card {
+                padding: 0.72rem 0.75rem;
             }
             .spotlight-card p,
-            .feature-card p {
+            .feature-card p,
+            .proof-card p {
                 overflow-wrap: anywhere;
-                font-size: 0.86rem;
+                font-size: 0.88rem;
             }
             .stat-row {
                 gap: 0.35rem;
             }
             .stat-chip {
-                font-size: 0.69rem;
+                font-size: 0.76rem;
             }
             button[data-testid="baseButton-primary"],
             button[data-testid="baseButton-secondary"] {
@@ -408,12 +516,24 @@ def apply_styles() -> None:
     )
 
 
-create_tables()
-
 assets_dir = Path(__file__).resolve().parent / "assets"
 icon_png = assets_dir / "artify_logo.png"
 logo_svg = assets_dir / "artify_logo.svg"
 logo_asset = logo_svg if logo_svg.exists() else icon_png
+
+
+def image_data_uri(path: Path):
+    if not path.exists():
+        return None
+    suffix = path.suffix.lower()
+    if suffix in {".jpg", ".jpeg"}:
+        mime = "image/jpeg"
+    elif suffix == ".webp":
+        mime = "image/webp"
+    else:
+        mime = "image/png"
+    encoded = base64.b64encode(path.read_bytes()).decode("ascii")
+    return f"data:{mime};base64,{encoded}"
 
 st.set_page_config(
     page_title="Artify AI",
@@ -422,6 +542,13 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
+
+@st.cache_resource
+def initialize_app() -> None:
+    create_tables()
+
+
+initialize_app()
 apply_styles()
 if logo_asset.exists() and hasattr(st, "logo"):
     try:
@@ -445,9 +572,9 @@ if "flash_message" in st.session_state:
     del st.session_state.flash_message
 
 with st.sidebar:
-    st.markdown('<div class="side-head">Account Center</div>', unsafe_allow_html=True)
+    st.markdown('<div class="side-head">Workspace</div>', unsafe_allow_html=True)
     st.markdown(
-        '<div class="side-sub">Secure sign-in and profile access</div>',
+        '<div class="side-sub">Navigation and account actions</div>',
         unsafe_allow_html=True,
     )
     st.markdown("---")
@@ -468,16 +595,78 @@ with st.sidebar:
             st.session_state.remember_me = False
             st.rerun()
     else:
+        st.info("Log in or create an account to access your dashboard, save edits, and manage your workspace.")
+        if st.button("Open dashboard", use_container_width=True):
+            st.warning("Please sign in from the main account panel first.")
+
+left, right = st.columns([1.55, 1], gap="large")
+
+with left:
+    st.markdown('<div class="brand-kicker">AI CARTOONIZATION STUDIO</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<h1 class="hero-title">Turn photos into crisp, studio-style cartoon visuals.</h1>',
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        '<p class="hero-sub">Upload, stylize, compare, and export in a clean flow built for creators and marketing teams.</p>',
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        """
+        <div class="stat-row">
+            <span class="stat-chip">One-click styles</span>
+            <span class="stat-chip">HD exports</span>
+            <span class="stat-chip">Private workspace</span>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    start_creating = st.button("Start Creating", type="primary", use_container_width=True)
+    if start_creating:
+        if st.session_state.logged_in:
+            st.switch_page("pages/dashboard.py")
+        else:
+            st.warning("Please sign in from the account panel on the right to continue.")
+
+    st.caption("Built for fast social posts, campaigns, and portfolio-ready outputs.")
+
+with right:
+    if st.session_state.logged_in:
+        st.markdown(
+            """
+            <div class="panel-card">
+                <p class="panel-title">Welcome back</p>
+                <p class="panel-sub">You are signed in and ready to process new images.</p>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        st.success(f"Signed in as {st.session_state.username}")
+        if st.session_state.email:
+            st.caption(st.session_state.email)
+        if st.button("Go to Dashboard", use_container_width=True, type="primary"):
+            st.switch_page("pages/dashboard.py")
+    else:
+        st.markdown(
+            """
+            <div class="panel-card">
+                <p class="panel-title">Account</p>
+                <p class="panel-sub">Sign in to save edits and access your private workspace.</p>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
         mode = st.radio(
             "Access",
             options=["Login", "Create account"],
             key="auth_mode",
             horizontal=True,
+            label_visibility="collapsed",
         )
 
         if mode == "Login":
             with st.form("login_form"):
-                st.markdown("#### Welcome back")
                 identifier = st.text_input("Email or username", key="login_identifier")
                 password = st.text_input("Password", type="password", key="login_password")
                 remember_me = st.checkbox("Remember Me", key="login_remember_me")
@@ -494,10 +683,8 @@ with st.sidebar:
                     st.session_state.remember_me = bool(remember_me)
                     st.rerun()
                 st.error(result.get("message", "Login failed."))
-
         else:
             with st.form("register_form"):
-                st.markdown("#### Create your account")
                 reg_user = st.text_input("Username", key="reg_username")
                 reg_email = st.text_input("Email", key="reg_email")
                 reg_pass = st.text_input("Password", type="password", key="reg_password")
@@ -506,8 +693,6 @@ with st.sidebar:
                     type="password",
                     key="reg_confirm",
                 )
-                
-
                 agree_terms = st.checkbox("I agree to the Terms and Conditions", key="reg_terms")
                 register_submit = st.form_submit_button("Create account", use_container_width=True)
 
@@ -534,53 +719,67 @@ with st.sidebar:
                     else:
                         st.error(result.get("message", "Registration failed."))
 
-left, right = st.columns([1.6, 1], gap="large")
-
-with left:
-    st.markdown('<div class="brand-kicker">AI CARTOONIZATION STUDIO</div>', unsafe_allow_html=True)
-    st.markdown(
-        '<h1 class="hero-title">Turn photos into crisp, studio-style cartoon visuals.</h1>',
-        unsafe_allow_html=True,
-    )
-    st.markdown(
-        '<p class="hero-sub">A clean workflow for creators: upload, stylize, preview, and export in minutes.</p>',
-        unsafe_allow_html=True,
-    )
-    st.markdown(
-        """
-        <div class="stat-row">
-            <span class="stat-chip">One-click styles</span>
-            <span class="stat-chip">HD exports</span>
-            <span class="stat-chip">Private workspace</span>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    c1, c2 = st.columns(2)
-    with c1:
-        open_editor = st.button("Launch AI Editor", type="primary", use_container_width=True)
-    with c2:
-        open_dashboard = st.button("Open dashboard", use_container_width=True)
-
-    if open_editor or open_dashboard:
-        if st.session_state.logged_in:
-            st.switch_page("pages/dashboard.py")
-        else:
-            st.warning("Please sign in from the sidebar to continue.")
-
-    st.caption("Built for fast social and portfolio-ready outputs.")
-
-with right:
     st.markdown(
         """
         <div class="spotlight-card">
             <h4>Quick flow</h4>
-            <p>1. Upload image<br>2. Apply style preset<br>3. Export final artwork</p>
+            <p>1. Upload image<br>2. Apply style preset<br>3. Compare and export final artwork</p>
         </div>
         """,
         unsafe_allow_html=True,
     )
+
+st.markdown('<div class="section-title">Style Preview</div>', unsafe_allow_html=True)
+before_image = assets_dir / "before.jpeg"
+cartoon_image = assets_dir / "cartoon_style.png"
+pencil_color_image = assets_dir / "pencil_color.png"
+sketch_image = assets_dir / "sketch_style.png"
+
+preview_cards = [
+    {
+        "title": "Before",
+        "description": "Original photo input ready for style transformation.",
+        "path": before_image,
+        "fallback_class": "proof-before",
+    },
+    {
+        "title": "Cartoon Style",
+        "description": "Soft-shaded look for social content and branding visuals.",
+        "path": cartoon_image,
+        "fallback_class": "proof-after",
+    },
+    {
+        "title": "Pencil Colour Style",
+        "description": "Color-rich pencil rendering with clean strokes.",
+        "path": pencil_color_image,
+        "fallback_class": "proof-alt",
+    },
+    {
+        "title": "Sketch Style",
+        "description": "Graphite-style outlines for classic sketch output.",
+        "path": sketch_image,
+        "fallback_class": "proof-before",
+    },
+]
+
+preview_columns = st.columns(len(preview_cards), gap="medium")
+for column, card in zip(preview_columns, preview_cards):
+    with column:
+        uri = image_data_uri(card["path"])
+        if uri:
+            image_block = f'<img src="{uri}" alt="{card["title"]}" class="proof-img-tag">'
+        else:
+            image_block = f'<div class="proof-image {card["fallback_class"]}"></div>'
+        st.markdown(
+            f"""
+            <div class="proof-card">
+                {image_block}
+                <h4>{card["title"]}</h4>
+                <p>{card["description"]}</p>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
 st.markdown('<div class="section-title">Highlights</div>', unsafe_allow_html=True)
 f1, f2 = st.columns(2, gap="medium")

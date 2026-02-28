@@ -278,22 +278,6 @@ def apply_styles() -> None:
                 padding-right: 0.7rem;
                 max-width: 100% !important;
             }
-            [data-testid="stSidebar"] {
-                width: auto !important;
-                min-width: 0 !important;
-                max-width: 100vw !important;
-            }
-            [data-testid="stSidebar"][aria-expanded="true"] {
-                width: min(88vw, 22rem) !important;
-                min-width: min(88vw, 22rem) !important;
-                max-width: min(88vw, 22rem) !important;
-            }
-            button[data-testid="collapsedControl"] {
-                position: fixed !important;
-                top: 0.56rem !important;
-                left: 0.56rem !important;
-                z-index: 1002 !important;
-            }
             .block-container [data-testid="stHorizontalBlock"] {
                 flex-direction: column !important;
                 gap: 0.65rem !important;
