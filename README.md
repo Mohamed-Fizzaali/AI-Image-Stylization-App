@@ -1,6 +1,3 @@
-<<<<<<< HEAD
-# AI-Powered-Image-Stylization-and-Cartoonization-Platform_Feb_Batch-8_2026
-=======
 # AI Image Cartoonization Platform
 
 ## Development Environment Setup
@@ -22,4 +19,3 @@ streamlit run frontend/app.py
 - Pillow
 - SQLite
 - Git
->>>>>>> master
