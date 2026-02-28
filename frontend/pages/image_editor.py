@@ -19,28 +19,37 @@ def apply_styles() -> None:
         @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap');
 
         :root {
-            --bg-top: #f8fcff;
-            --bg-mid: #e9f6f1;
-            --bg-bottom: #e2ebff;
-            --ink-900: #0f172a;
-            --ink-700: #334155;
-            --ink-500: #64748b;
-            --brand-800: #0d635d;
-            --brand-500: #14b8a6;
-            --card-bg: rgba(255, 255, 255, 0.84);
-            --card-stroke: rgba(148, 163, 184, 0.24);
+            --bg-top: #050d1e;
+            --bg-mid: #09182d;
+            --bg-bottom: #0f1f3a;
+            --ink-900: #eaf2ff;
+            --ink-700: #c0cfe8;
+            --ink-500: #8ea3c3;
+            --brand-800: #0d4f63;
+            --brand-500: #22d3ee;
+            --card-bg: rgba(12, 24, 44, 0.78);
+            --card-stroke: rgba(125, 162, 206, 0.24);
         }
 
         html, body, [class*="css"] {
             font-family: "Manrope", "Segoe UI", sans-serif;
+            color: var(--ink-700);
+        }
+
+        h1, h2, h3, h4, h5, h6 {
+            color: var(--ink-900);
+        }
+
+        p, label, li, [data-testid="stMarkdownContainer"] {
+            color: var(--ink-700);
         }
 
         html, body {
             background:
-                radial-gradient(circle at -4% -12%, rgba(56, 189, 248, 0.38), transparent 44%),
-                radial-gradient(circle at 102% -8%, rgba(249, 115, 22, 0.22), transparent 38%),
-                radial-gradient(circle at 78% 108%, rgba(34, 197, 94, 0.22), transparent 40%),
-                linear-gradient(122deg, #dbeafe 0%, #dcfce7 52%, #ffedd5 100%) fixed;
+                radial-gradient(circle at -2% -8%, rgba(34, 211, 238, 0.22), transparent 34%),
+                radial-gradient(circle at 103% 0%, rgba(251, 146, 60, 0.20), transparent 34%),
+                radial-gradient(circle at 70% 105%, rgba(59, 130, 246, 0.18), transparent 40%),
+                linear-gradient(160deg, var(--bg-top) 0%, var(--bg-mid) 46%, var(--bg-bottom) 100%) fixed;
         }
 
         [data-testid="stAppViewContainer"],
@@ -61,16 +70,47 @@ def apply_styles() -> None:
 
         .stApp {
             background:
-                radial-gradient(circle at -4% -12%, rgba(56, 189, 248, 0.38), transparent 44%),
-                radial-gradient(circle at 102% -8%, rgba(249, 115, 22, 0.22), transparent 38%),
-                radial-gradient(circle at 78% 108%, rgba(34, 197, 94, 0.22), transparent 40%),
-                linear-gradient(122deg, #dbeafe 0%, #dcfce7 52%, #ffedd5 100%);
+                radial-gradient(circle at -2% -8%, rgba(34, 211, 238, 0.22), transparent 34%),
+                radial-gradient(circle at 103% 0%, rgba(251, 146, 60, 0.20), transparent 34%),
+                radial-gradient(circle at 70% 105%, rgba(59, 130, 246, 0.18), transparent 40%),
+                linear-gradient(160deg, var(--bg-top) 0%, var(--bg-mid) 46%, var(--bg-bottom) 100%);
             background-attachment: fixed;
         }
 
         [data-testid="stSidebar"] {
-            border-right: 1px solid rgba(148, 163, 184, 0.22);
-            background: linear-gradient(180deg, rgba(246,250,255,0.97) 0%, rgba(231,240,255,0.92) 100%);
+            border-right: 1px solid rgba(125, 162, 206, 0.24);
+            background: linear-gradient(180deg, rgba(5, 13, 31, 0.98) 0%, rgba(12, 28, 52, 0.96) 100%);
+            color: var(--ink-700);
+            backdrop-filter: blur(10px);
+        }
+
+        [data-testid="stSidebar"] * {
+            color: var(--ink-700);
+        }
+
+        [data-testid="stSidebar"] h1,
+        [data-testid="stSidebar"] h2,
+        [data-testid="stSidebar"] h3,
+        [data-testid="stSidebar"] h4,
+        [data-testid="stSidebar"] h5,
+        [data-testid="stSidebar"] h6 {
+            color: var(--ink-900);
+        }
+
+        button[data-testid="collapsedControl"] {
+            background: rgba(7, 16, 32, 0.85) !important;
+            border: 1px solid rgba(125, 162, 206, 0.4) !important;
+            border-radius: 0.6rem !important;
+        }
+
+        button[data-testid="collapsedControl"] svg,
+        [data-testid="stSidebarNav"] svg {
+            fill: var(--ink-900) !important;
+            color: var(--ink-900) !important;
+        }
+
+        [data-testid="stSidebarNav"] a {
+            color: var(--ink-700) !important;
         }
 
         .block-container {
@@ -81,9 +121,9 @@ def apply_styles() -> None:
 
         .page-kicker {
             display: inline-block;
-            background: rgba(13, 99, 93, 0.10);
-            color: #0f766e;
-            border: 1px solid rgba(15, 118, 110, 0.24);
+            background: rgba(14, 116, 144, 0.22);
+            color: #8de9ff;
+            border: 1px solid rgba(34, 211, 238, 0.35);
             border-radius: 999px;
             padding: 0.34rem 0.84rem;
             font-size: 0.72rem;
@@ -100,6 +140,8 @@ def apply_styles() -> None:
             letter-spacing: -0.025em;
             color: var(--ink-900);
             font-weight: 800;
+            white-space: normal !important;
+            word-break: break-word;
         }
 
         .page-sub {
@@ -129,7 +171,7 @@ def apply_styles() -> None:
             justify-content: space-between;
             gap: 1rem;
             padding: 0.52rem 0;
-            border-bottom: 1px solid rgba(148, 163, 184, 0.22);
+            border-bottom: 1px solid rgba(125, 162, 206, 0.22);
             color: var(--ink-700);
             font-size: 0.92rem;
         }
@@ -151,17 +193,17 @@ def apply_styles() -> None:
 
         [data-testid="stFileUploader"] section {
             border-radius: 0.95rem;
-            border: 1px dashed rgba(15, 118, 110, 0.45);
-            background: rgba(255,255,255,0.68);
+            border: 1px dashed rgba(34, 211, 238, 0.42);
+            background: rgba(8, 20, 38, 0.62);
         }
 
         button[data-testid="baseButton-primary"] {
-            background: linear-gradient(135deg, var(--brand-800) 0%, var(--brand-500) 100%);
+            background: linear-gradient(135deg, #0e7490 0%, #22d3ee 100%);
             border: none;
-            color: #ffffff;
+            color: #03101f;
             font-weight: 700;
             border-radius: 0.72rem;
-            box-shadow: 0 10px 22px rgba(15, 118, 110, 0.22);
+            box-shadow: 0 10px 22px rgba(34, 211, 238, 0.20);
         }
 
         [data-testid="stLogo"] img,
@@ -172,15 +214,28 @@ def apply_styles() -> None:
 
         @media (max-width: 900px) {
             .block-container {
-                padding-top: 1.15rem;
-                padding-bottom: 1.2rem;
-                padding-left: 0.85rem;
-                padding-right: 0.85rem;
+                padding-top: 0.85rem;
+                padding-bottom: 1rem;
+                padding-left: 0.7rem;
+                padding-right: 0.7rem;
                 max-width: 100% !important;
+            }
+            [data-testid="stSidebar"] {
+                width: min(78vw, 320px) !important;
+                min-width: min(78vw, 320px) !important;
+                max-width: min(78vw, 320px) !important;
             }
             .block-container [data-testid="stHorizontalBlock"] {
                 flex-direction: column !important;
-                gap: 0.75rem !important;
+                gap: 0.65rem !important;
+            }
+            [data-testid="stHorizontalBlock"] {
+                flex-wrap: wrap !important;
+            }
+            [data-testid="column"] {
+                width: 100% !important;
+                flex: 1 1 100% !important;
+                min-width: 0 !important;
             }
             .block-container [data-testid="stHorizontalBlock"] > [data-testid="column"] {
                 width: 100% !important;
@@ -188,20 +243,20 @@ def apply_styles() -> None:
                 min-width: 0 !important;
             }
             .page-title {
-                font-size: clamp(1.6rem, 8.5vw, 2.1rem);
+                font-size: clamp(1.35rem, 7.4vw, 1.72rem);
                 line-height: 1.12;
                 overflow-wrap: anywhere;
             }
             .page-sub {
-                font-size: 0.94rem;
+                font-size: 0.88rem;
                 overflow-wrap: anywhere;
             }
             .meta-card {
-                padding: 0.9rem 0.95rem;
+                padding: 0.78rem 0.82rem;
             }
             .meta-item {
-                font-size: 0.88rem;
-                gap: 0.6rem;
+                font-size: 0.84rem;
+                gap: 0.45rem;
             }
             [data-testid="stLogo"] img,
             [data-testid="stLogo"] svg {
@@ -223,6 +278,7 @@ st.set_page_config(
     page_title="Image Upload & Preview",
     page_icon=str(icon_png) if icon_png.exists() else ":art:",
     layout="wide",
+    initial_sidebar_state="collapsed",
 )
 
 apply_styles()
