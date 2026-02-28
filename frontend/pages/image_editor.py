@@ -54,6 +54,11 @@ def apply_styles() -> None:
             background: transparent !important;
         }
 
+        html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stAppViewContainer"] > .main {
+            max-width: 100%;
+            overflow-x: hidden !important;
+        }
+
         .stApp {
             background:
                 radial-gradient(circle at -4% -12%, rgba(56, 189, 248, 0.38), transparent 44%),
@@ -163,6 +168,45 @@ def apply_styles() -> None:
         [data-testid="stLogo"] svg {
             max-height: 4.1rem !important;
             width: auto !important;
+        }
+
+        @media (max-width: 900px) {
+            .block-container {
+                padding-top: 1.15rem;
+                padding-bottom: 1.2rem;
+                padding-left: 0.85rem;
+                padding-right: 0.85rem;
+                max-width: 100% !important;
+            }
+            .block-container [data-testid="stHorizontalBlock"] {
+                flex-direction: column !important;
+                gap: 0.75rem !important;
+            }
+            .block-container [data-testid="stHorizontalBlock"] > [data-testid="column"] {
+                width: 100% !important;
+                flex: 1 1 100% !important;
+                min-width: 0 !important;
+            }
+            .page-title {
+                font-size: clamp(1.6rem, 8.5vw, 2.1rem);
+                line-height: 1.12;
+                overflow-wrap: anywhere;
+            }
+            .page-sub {
+                font-size: 0.94rem;
+                overflow-wrap: anywhere;
+            }
+            .meta-card {
+                padding: 0.9rem 0.95rem;
+            }
+            .meta-item {
+                font-size: 0.88rem;
+                gap: 0.6rem;
+            }
+            [data-testid="stLogo"] img,
+            [data-testid="stLogo"] svg {
+                max-height: 3rem !important;
+            }
         }
         </style>
         """,

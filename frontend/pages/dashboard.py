@@ -55,6 +55,11 @@ def apply_styles() -> None:
             background: transparent !important;
         }
 
+        html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stAppViewContainer"] > .main {
+            max-width: 100%;
+            overflow-x: hidden !important;
+        }
+
         .stApp {
             background:
                 radial-gradient(circle at -4% -12%, rgba(56, 189, 248, 0.38), transparent 44%),
@@ -216,6 +221,38 @@ def apply_styles() -> None:
         @media (max-width: 900px) {
             .block-container {
                 padding-top: 1.2rem;
+                padding-bottom: 1.2rem;
+                padding-left: 0.85rem;
+                padding-right: 0.85rem;
+                max-width: 100% !important;
+            }
+            .block-container [data-testid="stHorizontalBlock"] {
+                flex-direction: column !important;
+                gap: 0.75rem !important;
+            }
+            .block-container [data-testid="stHorizontalBlock"] > [data-testid="column"] {
+                width: 100% !important;
+                flex: 1 1 100% !important;
+                min-width: 0 !important;
+            }
+            .dash-title {
+                font-size: clamp(1.65rem, 8.5vw, 2.2rem);
+                line-height: 1.12;
+                overflow-wrap: anywhere;
+            }
+            .dash-sub {
+                font-size: 0.95rem;
+                overflow-wrap: anywhere;
+            }
+            .spot-card {
+                padding: 0.9rem 0.95rem;
+                overflow-wrap: anywhere;
+            }
+            [data-testid="stMetric"] {
+                padding: 0.58rem 0.65rem;
+            }
+            .mini-pill {
+                font-size: 0.72rem;
             }
             [data-testid="stLogo"] img,
             [data-testid="stLogo"] svg {
