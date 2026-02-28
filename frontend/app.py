@@ -136,6 +136,50 @@ def apply_styles() -> None:
             line-height: 1.38;
         }
 
+        .st-key-auth_shell {
+            background: linear-gradient(180deg, #ffffff 0%, #f6fbff 100%);
+            border: 1px solid #d8e6ff;
+            border-radius: 1.2rem;
+            padding: 1rem;
+            box-shadow: 0 16px 30px rgba(6, 23, 56, 0.2);
+            animation: fadeInUp 380ms ease both;
+            margin-bottom: 0.9rem;
+        }
+
+        .st-key-auth_shell .panel-title {
+            color: #0a1f3f !important;
+        }
+
+        .st-key-auth_shell .panel-sub {
+            color: #4e6388 !important;
+        }
+
+        .st-key-auth_shell label,
+        .st-key-auth_shell p,
+        .st-key-auth_shell .stCaptionContainer {
+            color: #1b355f !important;
+        }
+
+        .st-key-auth_shell [data-testid="stTabs"] [role="tablist"] {
+            gap: 0.35rem;
+            margin-bottom: 0.55rem;
+        }
+
+        .st-key-auth_shell [data-testid="stTabs"] [role="tab"] {
+            border-radius: 999px;
+            border: 1px solid #c7daf9;
+            background: #f4f8ff;
+            color: #1f4276;
+            padding: 0.26rem 0.88rem;
+        }
+
+        .st-key-auth_shell [data-testid="stTabs"] [role="tab"][aria-selected="true"] {
+            background: linear-gradient(135deg, #0e7490 0%, #22d3ee 100%);
+            border-color: transparent;
+            color: #03101f;
+            font-weight: 700;
+        }
+
         .side-head {
             font-size: 1.1rem;
             font-weight: 800;
@@ -157,6 +201,11 @@ def apply_styles() -> None:
             padding: 0.85rem 0.85rem 0.55rem 0.85rem;
         }
 
+        .st-key-auth_shell form {
+            background: #f8fbff;
+            border: 1px solid #d7e5fb;
+        }
+
         input[type="text"],
         input[type="password"],
         input[type="email"] {
@@ -164,6 +213,14 @@ def apply_styles() -> None:
             border: 1px solid rgba(125, 162, 206, 0.32);
             background: rgba(5, 13, 31, 0.74);
             color: var(--ink-900);
+        }
+
+        .st-key-auth_shell input[type="text"],
+        .st-key-auth_shell input[type="password"],
+        .st-key-auth_shell input[type="email"] {
+            background: #ffffff;
+            border: 1px solid #c4d8f7;
+            color: #0d274f;
         }
 
         input[type="text"]::placeholder,
@@ -486,6 +543,9 @@ def apply_styles() -> None:
             .proof-card {
                 padding: 0.72rem 0.75rem;
             }
+            .st-key-auth_shell {
+                padding: 0.75rem;
+            }
             .spotlight-card p,
             .feature-card p,
             .proof-card p {
@@ -648,76 +708,70 @@ with right:
         if st.button("Go to Dashboard", use_container_width=True, type="primary"):
             st.switch_page("pages/dashboard.py")
     else:
-        st.markdown(
-            """
-            <div class="panel-card">
+        auth_card_container = st.container(key="auth_shell")
+        with auth_card_container:
+            st.markdown(
+                """
                 <p class="panel-title">Account</p>
-                <p class="panel-sub">Sign in to save edits and access your private workspace.</p>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-        mode = st.radio(
-            "Access",
-            options=["Login", "Create account"],
-            key="auth_mode",
-            horizontal=True,
-            label_visibility="collapsed",
-        )
+                <p class="panel-sub">Sign in or create an account to save edits and access your private workspace.</p>
+                """,
+                unsafe_allow_html=True,
+            )
+            login_tab, register_tab = st.tabs(["Log in", "Create account"])
 
-        if mode == "Login":
-            with st.form("login_form"):
-                identifier = st.text_input("Email or username", key="login_identifier")
-                password = st.text_input("Password", type="password", key="login_password")
-                remember_me = st.checkbox("Remember Me", key="login_remember_me")
-                login_submit = st.form_submit_button("Sign in", use_container_width=True)
-            st.caption("Forgot Password? (Coming Soon)")
+            with login_tab:
+                with st.form("login_form"):
+                    identifier = st.text_input("Email or username", key="login_identifier")
+                    password = st.text_input("Password", type="password", key="login_password")
+                    remember_me = st.checkbox("Remember Me", key="login_remember_me")
+                    login_submit = st.form_submit_button("Sign in", use_container_width=True)
+                st.caption("Forgot Password? (Coming Soon)")
 
-            if login_submit:
-                result = login_user(identifier.strip(), password)
-                if result.get("success"):
-                    st.session_state.logged_in = True
-                    st.session_state.username = result.get("username")
-                    st.session_state.email = result.get("email")
-                    st.session_state.user_id = result.get("user_id")
-                    st.session_state.remember_me = bool(remember_me)
-                    st.rerun()
-                st.error(result.get("message", "Login failed."))
-        else:
-            with st.form("register_form"):
-                reg_user = st.text_input("Username", key="reg_username")
-                reg_email = st.text_input("Email", key="reg_email")
-                reg_pass = st.text_input("Password", type="password", key="reg_password")
-                reg_confirm = st.text_input(
-                    "Confirm password",
-                    type="password",
-                    key="reg_confirm",
-                )
-                agree_terms = st.checkbox("I agree to the Terms and Conditions", key="reg_terms")
-                register_submit = st.form_submit_button("Create account", use_container_width=True)
-
-            if register_submit:
-                reg_user_clean = reg_user.strip()
-                reg_email_clean = reg_email.strip()
-                submit_errors = []
-
-                if not (reg_user_clean and reg_email_clean and reg_pass and reg_confirm):
-                    submit_errors.append("All fields are required.")
-                if reg_pass and reg_confirm and reg_pass != reg_confirm:
-                    submit_errors.append("Passwords do not match.")
-                if not agree_terms:
-                    submit_errors.append("You must agree to the Terms and Conditions.")
-
-                if submit_errors:
-                    st.error("Please fix the following:\n- " + "\n- ".join(submit_errors))
-                else:
-                    result = register_user(reg_user_clean, reg_email_clean, reg_pass)
+                if login_submit:
+                    result = login_user(identifier.strip(), password)
                     if result.get("success"):
-                        st.session_state.flash_message = "Account created. Please sign in."
-                        st.session_state.auth_mode = "Login"
+                        st.session_state.logged_in = True
+                        st.session_state.username = result.get("username")
+                        st.session_state.email = result.get("email")
+                        st.session_state.user_id = result.get("user_id")
+                        st.session_state.remember_me = bool(remember_me)
                         st.rerun()
+                    st.error(result.get("message", "Login failed."))
+
+            with register_tab:
+                with st.form("register_form"):
+                    reg_user = st.text_input("Username", key="reg_username")
+                    reg_email = st.text_input("Email", key="reg_email")
+                    reg_pass = st.text_input("Password", type="password", key="reg_password")
+                    reg_confirm = st.text_input(
+                        "Confirm password",
+                        type="password",
+                        key="reg_confirm",
+                    )
+                    agree_terms = st.checkbox("I agree to the Terms and Conditions", key="reg_terms")
+                    register_submit = st.form_submit_button("Create account", use_container_width=True)
+
+                if register_submit:
+                    reg_user_clean = reg_user.strip()
+                    reg_email_clean = reg_email.strip()
+                    submit_errors = []
+
+                    if not (reg_user_clean and reg_email_clean and reg_pass and reg_confirm):
+                        submit_errors.append("All fields are required.")
+                    if reg_pass and reg_confirm and reg_pass != reg_confirm:
+                        submit_errors.append("Passwords do not match.")
+                    if not agree_terms:
+                        submit_errors.append("You must agree to the Terms and Conditions.")
+
+                    if submit_errors:
+                        st.error("Please fix the following:\n- " + "\n- ".join(submit_errors))
                     else:
-                        st.error(result.get("message", "Registration failed."))
+                        result = register_user(reg_user_clean, reg_email_clean, reg_pass)
+                        if result.get("success"):
+                            st.session_state.flash_message = "Account created. Please sign in."
+                            st.rerun()
+                        else:
+                            st.error(result.get("message", "Registration failed."))
 
     st.markdown(
         """
