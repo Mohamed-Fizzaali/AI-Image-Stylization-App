@@ -1,5 +1,6 @@
 import hashlib
 import sys
+import time
 from pathlib import Path
 
 import streamlit as st
@@ -10,6 +11,14 @@ if str(ROOT_DIR) not in sys.path:
     sys.path.append(str(ROOT_DIR))
 
 from backend.image_upload import get_image_metadata, save_uploaded_image, validate_image
+from backend.image_processing import (
+    bgr_to_rgb,
+    classic_cartoon,
+    encode_image_to_png,
+    pencil_color_effect,
+    read_image,
+    sketch_effect,
+)
 
 
 def apply_styles() -> None:
@@ -296,6 +305,12 @@ if "current_image_path" not in st.session_state:
     st.session_state.current_image_path = None
 if "current_image_hash" not in st.session_state:
     st.session_state.current_image_hash = None
+if "processed_image" not in st.session_state:
+    st.session_state.processed_image = None
+if "processed_style" not in st.session_state:
+    st.session_state.processed_style = None
+if "processing_time" not in st.session_state:
+    st.session_state.processing_time = None
 
 with st.sidebar:
     st.markdown("### Image Tools")
@@ -346,6 +361,9 @@ if uploaded_file is not None:
             else:
                 st.session_state.current_image_path = saved_path
                 st.session_state.current_image_hash = file_hash
+                st.session_state.processed_image = None
+                st.session_state.processed_style = None
+                st.session_state.processing_time = None
                 st.success("Image validated and saved successfully.")
 
 current_image_path = st.session_state.get("current_image_path")
@@ -356,6 +374,9 @@ if current_image_path:
         st.warning("Saved image path no longer exists. Please upload again.")
         st.session_state.current_image_path = None
         st.session_state.current_image_hash = None
+        st.session_state.processed_image = None
+        st.session_state.processed_style = None
+        st.session_state.processing_time = None
         st.stop()
 
     try:
@@ -389,6 +410,100 @@ if current_image_path:
         if st.button("Replace Image", type="primary", use_container_width=True):
             st.session_state.current_image_path = None
             st.session_state.current_image_hash = None
+            st.session_state.processed_image = None
+            st.session_state.processed_style = None
+            st.session_state.processing_time = None
             st.rerun()
+
+    st.markdown("")
+    st.markdown("### Stylization")
+
+    selected_style = st.selectbox(
+        "Choose a style",
+        ["Classic Cartoon", "Sketch", "Pencil Color"],
+        key="style_select",
+    )
+
+    cartoon_k = None
+    cartoon_thickness = None
+    if selected_style == "Classic Cartoon":
+        cartoon_k = st.slider("Number of Colors", 4, 16, 8)
+        cartoon_thickness = st.slider("Edge Thickness", 1, 5, 2)
+
+    process_clicked = st.button("Process Image", type="primary", use_container_width=True)
+
+    if process_clicked:
+        with st.spinner("Processing image..."):
+            start_time = time.perf_counter()
+            try:
+                if selected_style == "Classic Cartoon":
+                    processed = classic_cartoon(
+                        current_image_path,
+                        k=cartoon_k or 8,
+                        edge_thickness=cartoon_thickness or 2,
+                    )
+                elif selected_style == "Sketch":
+                    processed = sketch_effect(current_image_path)
+                else:
+                    processed = pencil_color_effect(current_image_path)
+            except Exception as exc:
+                st.error(f"Failed to process image: {exc}")
+                st.session_state.processed_image = None
+                st.session_state.processed_style = None
+                st.session_state.processing_time = None
+            else:
+                elapsed = time.perf_counter() - start_time
+                st.session_state.processed_image = processed
+                st.session_state.processed_style = selected_style
+                st.session_state.processing_time = elapsed
+
+    # Side-by-side comparison and download, if processing succeeded at least once.
+    processed_image = st.session_state.get("processed_image")
+    processed_style = st.session_state.get("processed_style")
+    processing_time = st.session_state.get("processing_time")
+
+    if processed_image is not None:
+        try:
+            original_bgr = read_image(current_image_path)
+        except Exception as exc:
+            st.error(f"Could not read original image for display: {exc}")
+        else:
+            if processed_image.ndim == 2:
+                original_display = bgr_to_rgb(original_bgr)
+                processed_display = processed_image
+            else:
+                original_display = bgr_to_rgb(original_bgr)
+                processed_display = bgr_to_rgb(processed_image)
+
+            display_width = 520
+
+            col_orig, col_proc = st.columns(2, gap="large")
+            with col_orig:
+                st.subheader("Original")
+                st.image(original_display, width=display_width)
+            with col_proc:
+                title = f"{processed_style} result" if processed_style else "Processed"
+                st.subheader(title)
+                st.image(processed_display, width=display_width)
+                if processing_time is not None:
+                    st.caption(f"Processing time: {processing_time:.2f} seconds")
+
+            try:
+                download_bytes = encode_image_to_png(processed_image)
+            except Exception as exc:
+                st.error(f"Could not prepare download: {exc}")
+            else:
+                st.download_button(
+                    "Download processed image",
+                    data=download_bytes,
+                    file_name="artify_output.png",
+                    mime="image/png",
+                )
+
+            st.markdown("")
+            st.caption(
+                "You can change the style above to apply another effect "
+                "to the same image without uploading again."
+            )
 else:
     st.info("Upload an image to preview and view metadata.")

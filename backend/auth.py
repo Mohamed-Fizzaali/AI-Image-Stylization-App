@@ -3,6 +3,8 @@ import bcrypt
 import sqlite3
 from database.db import get_connection
 
+USERNAME_PATTERN = re.compile(r"^[A-Za-z0-9._-]{3,32}$")
+
 
 # =========================
 # EMAIL VALIDATION
@@ -11,6 +13,18 @@ from database.db import get_connection
 def is_valid_email(email: str) -> bool:
     pattern = r"^[\w\.-]+@[\w\.-]+\.\w+$"
     return re.match(pattern, email) is not None
+
+
+def is_valid_username(username: str) -> bool:
+    return USERNAME_PATTERN.match(username) is not None
+
+
+def normalize_username(username: str) -> str:
+    return (username or "").strip()
+
+
+def normalize_email(email: str) -> str:
+    return (email or "").strip().lower()
 
 
 # =========================
@@ -51,11 +65,23 @@ def register_user(username: str, email: str, password: str) -> dict:
     secure password hashing, and atomic database insertion.
     """
 
+    username_clean = normalize_username(username)
+    email_clean = normalize_email(email)
+
     # Input validation
-    if not username or not email or not password:
+    if not username_clean or not email_clean or not password:
         return {"success": False, "message": "All fields are required."}
 
-    if not is_valid_email(email):
+    if "@" in username_clean:
+        return {"success": False, "message": "Username cannot contain @."}
+
+    if not is_valid_username(username_clean):
+        return {
+            "success": False,
+            "message": "Username must be 3-32 characters and can contain letters, numbers, dot, underscore, or hyphen.",
+        }
+
+    if not is_valid_email(email_clean):
         return {"success": False, "message": "Invalid email format."}
 
     if not is_strong_password(password):
@@ -73,7 +99,7 @@ def register_user(username: str, email: str, password: str) -> dict:
             cursor.execute("""
                 INSERT INTO Users (username, email, password_hash)
                 VALUES (?, ?, ?)
-            """, (username, email, password_hash))
+            """, (username_clean, email_clean, password_hash))
 
         return {"success": True, "message": "User registered successfully."}
 
@@ -81,5 +107,5 @@ def register_user(username: str, email: str, password: str) -> dict:
         # Catches UNIQUE constraint violation
         return {"success": False, "message": "Username or email already exists."}
 
-    except Exception as e:
-        return {"success": False, "message": f"Database error: {str(e)}"}
+    except Exception:
+        return {"success": False, "message": "Unable to register right now. Please try again later."}

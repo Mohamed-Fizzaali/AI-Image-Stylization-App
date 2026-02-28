@@ -140,7 +140,7 @@ def apply_styles() -> None:
             background: linear-gradient(180deg, #ffffff 0%, #f6fbff 100%);
             border: 1px solid #d8e6ff;
             border-radius: 1.2rem;
-            padding: 1rem;
+            padding: 1rem 1rem 0.9rem 1rem;
             box-shadow: 0 16px 30px rgba(6, 23, 56, 0.2);
             animation: fadeInUp 380ms ease both;
             margin-bottom: 0.9rem;
@@ -148,10 +148,38 @@ def apply_styles() -> None:
 
         .st-key-auth_shell .panel-title {
             color: #0a1f3f !important;
+            font-size: 1.16rem;
         }
 
         .st-key-auth_shell .panel-sub {
             color: #4e6388 !important;
+            margin-bottom: 0.58rem;
+        }
+
+        .st-key-auth_shell .auth-chip-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.35rem;
+            margin-bottom: 0.65rem;
+        }
+
+        .st-key-auth_shell .auth-chip {
+            display: inline-flex;
+            align-items: center;
+            border-radius: 999px;
+            border: 1px solid #c7daf9;
+            background: #f4f8ff;
+            color: #2a4c7c;
+            font-size: 0.72rem;
+            font-weight: 650;
+            padding: 0.2rem 0.6rem;
+        }
+
+        .st-key-auth_shell .auth-note {
+            margin: 0.38rem 0 0 0;
+            text-align: right;
+            color: #5170a0 !important;
+            font-size: 0.78rem;
         }
 
         .st-key-auth_shell label,
@@ -162,15 +190,19 @@ def apply_styles() -> None:
 
         .st-key-auth_shell [data-testid="stTabs"] [role="tablist"] {
             gap: 0.35rem;
-            margin-bottom: 0.55rem;
+            margin-bottom: 0.42rem;
+            background: #eaf2ff;
+            border: 1px solid #d0e1fb;
+            border-radius: 999px;
+            padding: 0.2rem;
         }
 
         .st-key-auth_shell [data-testid="stTabs"] [role="tab"] {
             border-radius: 999px;
-            border: 1px solid #c7daf9;
-            background: #f4f8ff;
+            border: 1px solid transparent;
+            background: transparent;
             color: #1f4276;
-            padding: 0.26rem 0.88rem;
+            padding: 0.3rem 0.88rem;
         }
 
         .st-key-auth_shell [data-testid="stTabs"] [role="tab"][aria-selected="true"] {
@@ -178,6 +210,10 @@ def apply_styles() -> None:
             border-color: transparent;
             color: #03101f;
             font-weight: 700;
+        }
+
+        .st-key-auth_shell [data-testid="stTabs"] [data-baseweb="tab-panel"] {
+            padding-top: 0.4rem;
         }
 
         .side-head {
@@ -202,10 +238,13 @@ def apply_styles() -> None:
         }
 
         .st-key-auth_shell form {
-            background: #f8fbff;
-            border: 1px solid #d7e5fb;
+            background: transparent;
+            border: none;
+            border-radius: 0;
+            padding: 0;
         }
 
+        /* Default dark inputs outside the auth shell */
         input[type="text"],
         input[type="password"],
         input[type="email"] {
@@ -215,12 +254,37 @@ def apply_styles() -> None:
             color: var(--ink-900);
         }
 
+        /* Streamlit wraps text/password fields; style wrapper only once to avoid double-layer boxes */
+        .st-key-auth_shell [data-baseweb="input"] {
+            border: 1px solid #c4d8f7 !important;
+            border-radius: 0.72rem !important;
+            background: #ffffff !important;
+            box-shadow: none !important;
+        }
+
+        .st-key-auth_shell [data-baseweb="input"] > div {
+            background: transparent !important;
+            border: none !important;
+            box-shadow: none !important;
+        }
+
         .st-key-auth_shell input[type="text"],
         .st-key-auth_shell input[type="password"],
         .st-key-auth_shell input[type="email"] {
-            background: #ffffff;
-            border: 1px solid #c4d8f7;
-            color: #0d274f;
+            background: transparent !important;
+            border: none !important;
+            box-shadow: none !important;
+            color: #0d274f !important;
+        }
+
+        .st-key-auth_shell [data-testid="stCheckbox"] label p {
+            font-size: 0.82rem;
+        }
+
+        .st-key-auth_shell [data-testid="stFormSubmitButton"] button {
+            font-weight: 700;
+            border-radius: 0.72rem;
+            min-height: 2.58rem;
         }
 
         input[type="text"]::placeholder,
@@ -245,6 +309,11 @@ def apply_styles() -> None:
         input[type="email"]:focus {
             border-color: rgba(34, 211, 238, 0.75);
             box-shadow: 0 0 0 1px rgba(34, 211, 238, 0.35);
+        }
+
+        .st-key-auth_shell [data-baseweb="input"]:focus-within {
+            border-color: #67b5f6 !important;
+            box-shadow: 0 0 0 1px rgba(41, 130, 210, 0.3) !important;
         }
 
         .brand-kicker {
@@ -582,6 +651,7 @@ logo_svg = assets_dir / "artify_logo.svg"
 logo_asset = logo_svg if logo_svg.exists() else icon_png
 
 
+@st.cache_data(show_spinner=False)
 def image_data_uri(path: Path):
     if not path.exists():
         return None
@@ -655,7 +725,7 @@ with st.sidebar:
             st.session_state.remember_me = False
             st.rerun()
     else:
-        st.info("Log in or create an account to access your dashboard, save edits, and manage your workspace.")
+        st.info("Log in or register to access your dashboard, save edits, and manage your workspace.")
         if st.button("Open dashboard", use_container_width=True):
             st.warning("Please sign in from the main account panel first.")
 
@@ -713,19 +783,34 @@ with right:
             st.markdown(
                 """
                 <p class="panel-title">Account</p>
-                <p class="panel-sub">Sign in or create an account to save edits and access your private workspace.</p>
                 """,
                 unsafe_allow_html=True,
             )
-            login_tab, register_tab = st.tabs(["Log in", "Create account"])
+            login_tab, register_tab = st.tabs(["Log in", "Register"])
 
             with login_tab:
                 with st.form("login_form"):
-                    identifier = st.text_input("Email or username", key="login_identifier")
-                    password = st.text_input("Password", type="password", key="login_password")
-                    remember_me = st.checkbox("Remember Me", key="login_remember_me")
-                    login_submit = st.form_submit_button("Sign in", use_container_width=True)
-                st.caption("Forgot Password? (Coming Soon)")
+                    identifier = st.text_input(
+                        "Email or username",
+                        key="login_identifier",
+                        placeholder="you@example.com or username",
+                    )
+                    password = st.text_input(
+                        "Password",
+                        type="password",
+                        key="login_password",
+                        placeholder="Enter your password",
+                    )
+                    remember_me = st.checkbox(
+                        "Remember me on this device",
+                        key="login_remember_me",
+                    )
+                    login_submit = st.form_submit_button(
+                        "Sign in",
+                        use_container_width=True,
+                        type="primary",
+                    )
+                    st.caption("Forgot password? Recovery options are coming soon.")
 
                 if login_submit:
                     result = login_user(identifier.strip(), password)
@@ -736,20 +821,39 @@ with right:
                         st.session_state.user_id = result.get("user_id")
                         st.session_state.remember_me = bool(remember_me)
                         st.rerun()
-                    st.error(result.get("message", "Login failed."))
+                    else:
+                        st.error(result.get("message", "Login failed."))
 
             with register_tab:
                 with st.form("register_form"):
-                    reg_user = st.text_input("Username", key="reg_username")
-                    reg_email = st.text_input("Email", key="reg_email")
-                    reg_pass = st.text_input("Password", type="password", key="reg_password")
+                    reg_col1, reg_col2 = st.columns(2, gap="small")
+                    with reg_col1:
+                        reg_user = st.text_input(
+                            "Username",
+                            key="reg_username",
+                            placeholder="e.g. alex.smith",
+                        )
+                    with reg_col2:
+                        reg_email = st.text_input(
+                            "Email",
+                            key="reg_email",
+                            placeholder="you@example.com",
+                        )
+                    reg_pass = st.text_input(
+                        "Password",
+                        type="password",
+                        key="reg_password",
+                        placeholder="Create a strong password",
+                    )
                     reg_confirm = st.text_input(
                         "Confirm password",
                         type="password",
                         key="reg_confirm",
+                        placeholder="Re-enter your password",
                     )
+                    st.caption("Use at least 8 characters with uppercase, lowercase, number, and special symbol.")
                     agree_terms = st.checkbox("I agree to the Terms and Conditions", key="reg_terms")
-                    register_submit = st.form_submit_button("Create account", use_container_width=True)
+                    register_submit = st.form_submit_button("Register", use_container_width=True, type="primary")
 
                 if register_submit:
                     reg_user_clean = reg_user.strip()
