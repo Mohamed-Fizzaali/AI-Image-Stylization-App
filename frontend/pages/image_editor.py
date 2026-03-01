@@ -20,6 +20,80 @@ from backend.image_processing import (
     sketch_effect,
 )
 
+STYLE_OPTIONS = ["Classic Cartoon", "Sketch", "Pencil Color"]
+
+
+class _SessionUploadFile:
+    """Minimal uploaded-file shim for dashboard -> editor handoff."""
+
+    def __init__(self, name: str, data: bytes) -> None:
+        self.name = name
+        self._data = data
+
+    def getbuffer(self):
+        return memoryview(self._data)
+
+    def getvalue(self) -> bytes:
+        return self._data
+
+    def read(self) -> bytes:
+        return self._data
+
+    def seek(self, _offset: int) -> None:
+        return
+
+
+def _load_dashboard_prefill() -> None:
+    """
+    Import an uploaded image passed from dashboard, if present.
+
+    The dashboard stores a small payload in session state:
+    ``dashboard_image_prefill = {name, bytes, style}``.
+    """
+    prefill = st.session_state.pop("dashboard_image_prefill", None)
+    if not prefill:
+        return
+
+    style_hint = prefill.get("style")
+    if isinstance(style_hint, str) and style_hint in STYLE_OPTIONS:
+        st.session_state.style_select = style_hint
+
+    raw_bytes = prefill.get("bytes")
+    file_name = prefill.get("name") or "dashboard_upload.png"
+    if not isinstance(raw_bytes, (bytes, bytearray)) or not raw_bytes:
+        st.warning("Could not import the dashboard image. Please upload again.")
+        return
+
+    incoming_hash = hashlib.sha256(raw_bytes).hexdigest()
+    current_hash = st.session_state.get("current_image_hash")
+    current_path = st.session_state.get("current_image_path")
+    if current_path and current_hash == incoming_hash and Path(current_path).exists():
+        return
+
+    dashboard_file = _SessionUploadFile(str(file_name), bytes(raw_bytes))
+    try:
+        is_valid, validation_message = validate_image(dashboard_file, max_size_mb=10)
+    except Exception as exc:
+        st.warning(f"Could not import dashboard image: {exc}")
+        return
+
+    if not is_valid:
+        st.warning(validation_message or "Could not import dashboard image.")
+        return
+
+    try:
+        saved_path = save_uploaded_image(dashboard_file)
+    except Exception as exc:
+        st.warning(f"Could not save dashboard image: {exc}")
+        return
+
+    st.session_state.current_image_path = saved_path
+    st.session_state.current_image_hash = incoming_hash
+    st.session_state.processed_image = None
+    st.session_state.processed_style = None
+    st.session_state.processing_time = None
+    st.success("Image imported from dashboard.")
+
 
 def apply_styles() -> None:
     st.markdown(
@@ -312,14 +386,16 @@ if "processed_style" not in st.session_state:
 if "processing_time" not in st.session_state:
     st.session_state.processing_time = None
 
+_load_dashboard_prefill()
+
 with st.sidebar:
     st.markdown("### Image Tools")
     st.caption("Upload, review metadata, and replace current image.")
     st.markdown("---")
-    if st.button("Back to dashboard", use_container_width=True):
+    if st.button("Back to dashboard", width="stretch"):
         st.switch_page("pages/dashboard.py")
         st.stop()
-    if st.button("Back to home", use_container_width=True):
+    if st.button("Back to home", width="stretch"):
         st.switch_page("app.py")
         st.stop()
 
@@ -390,7 +466,7 @@ if current_image_path:
     with image_col:
         with st.container(border=True):
             st.subheader("Preview")
-            st.image(current_image_path, use_container_width=True)
+            st.image(current_image_path, width="stretch")
             st.caption(str(image_path_obj))
 
     with meta_col:
@@ -407,7 +483,7 @@ if current_image_path:
             unsafe_allow_html=True,
         )
         st.markdown("")
-        if st.button("Replace Image", type="primary", use_container_width=True):
+        if st.button("Replace Image", type="primary", width="stretch"):
             st.session_state.current_image_path = None
             st.session_state.current_image_hash = None
             st.session_state.processed_image = None
@@ -420,7 +496,7 @@ if current_image_path:
 
     selected_style = st.selectbox(
         "Choose a style",
-        ["Classic Cartoon", "Sketch", "Pencil Color"],
+        STYLE_OPTIONS,
         key="style_select",
     )
 
@@ -430,7 +506,7 @@ if current_image_path:
         cartoon_k = st.slider("Number of Colors", 4, 16, 8)
         cartoon_thickness = st.slider("Edge Thickness", 1, 5, 2)
 
-    process_clicked = st.button("Process Image", type="primary", use_container_width=True)
+    process_clicked = st.button("Process Image", type="primary", width="stretch")
 
     if process_clicked:
         with st.spinner("Processing image..."):

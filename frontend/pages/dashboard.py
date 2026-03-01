@@ -452,13 +452,13 @@ with st.sidebar:
     )
 
     st.markdown("---")
-    if st.button("Image Processing", use_container_width=True):
+    if st.button("Image Processing", width="stretch"):
         st.switch_page("pages/image_editor.py")
         st.stop()
-    if st.button("Back to home", use_container_width=True):
+    if st.button("Back to home", width="stretch"):
         st.switch_page("app.py")
         st.stop()
-    if st.button("Log out", use_container_width=True, type="primary"):
+    if st.button("Log out", width="stretch", type="primary"):
         st.session_state.clear()
         st.switch_page("app.py")
         st.stop()
@@ -495,8 +495,8 @@ if menu == "Image Studio":
     st.markdown(
         """
         <div class="spot-card">
-            Upload an image, set creative controls, and run processing from one clean flow.
-            Your OpenCV cartoonization function can be connected directly to the generate action below.
+            Upload and preview here, then continue to the dedicated Image Editor
+            page where the actual processing pipeline runs.
         </div>
         """,
         unsafe_allow_html=True,
@@ -512,34 +512,39 @@ if menu == "Image Studio":
                 help="Supported formats: JPG, JPEG, PNG",
             )
             if uploaded_file:
-                st.image(uploaded_file, caption="Source image preview", use_container_width=True)
+                st.image(uploaded_file, caption="Source image preview", width="stretch")
             else:
                 st.caption("Drop an image to start previewing your output setup.")
 
     with right:
         with st.container(border=True):
             style = st.selectbox(
-                "Cartoon style",
-                ["Classic", "Soft shading", "Bold outlines", "High contrast"],
+                "Quick style preset",
+                ["Classic Cartoon", "Sketch", "Pencil Color"],
             )
-            intensity = st.slider("Effect intensity", min_value=0, max_value=100, value=65)
-            preserve_skin = st.checkbox("Preserve skin tones", value=True)
-            keep_background = st.checkbox("Keep background details", value=True)
 
-            run_processing = st.button("Generate cartoon image", type="primary", use_container_width=True)
+            run_processing = st.button("Continue in Image Editor", type="primary", width="stretch")
             if run_processing and not uploaded_file:
                 st.warning("Upload an image before generating.")
             elif run_processing:
-                st.info(
-                    f"Pipeline placeholder: style={style}, intensity={intensity}, "
-                    f"preserve_skin={preserve_skin}, keep_background={keep_background}"
-                )
+                uploaded_bytes = uploaded_file.getvalue()
+                max_bytes = 10 * 1024 * 1024
+                if len(uploaded_bytes) > max_bytes:
+                    st.warning("File is larger than 10 MB. Please upload a smaller image.")
+                else:
+                    st.session_state.dashboard_image_prefill = {
+                        "name": uploaded_file.name,
+                        "bytes": uploaded_bytes,
+                        "style": style,
+                    }
+                    st.switch_page("pages/image_editor.py")
+                    st.stop()
 
 elif menu == "Payment History":
     st.subheader("Payment History")
     with st.container(border=True):
         if transactions:
-            st.dataframe(transactions, use_container_width=True, hide_index=True)
+            st.dataframe(transactions, width="stretch", hide_index=True)
         else:
             st.info("No transactions found yet. Completed payments will appear here.")
 

@@ -714,10 +714,10 @@ with st.sidebar:
         if st.session_state.email:
             st.caption(st.session_state.email)
 
-        if st.button("Open Dashboard", use_container_width=True, type="primary"):
+        if st.button("Open Dashboard", width="stretch", type="primary"):
             st.switch_page("pages/dashboard.py")
 
-        if st.button("Log out", use_container_width=True):
+        if st.button("Log out", width="stretch"):
             st.session_state.logged_in = False
             st.session_state.username = None
             st.session_state.email = None
@@ -726,7 +726,7 @@ with st.sidebar:
             st.rerun()
     else:
         st.info("Log in or register to access your dashboard, save edits, and manage your workspace.")
-        if st.button("Open dashboard", use_container_width=True):
+        if st.button("Open dashboard", width="stretch"):
             st.warning("Please sign in from the main account panel first.")
 
 left, right = st.columns([1.55, 1], gap="large")
@@ -752,7 +752,7 @@ with left:
         unsafe_allow_html=True,
     )
 
-    start_creating = st.button("Start Creating", type="primary", use_container_width=True)
+    start_creating = st.button("Start Creating", type="primary", width="stretch")
     if start_creating:
         if st.session_state.logged_in:
             st.switch_page("pages/dashboard.py")
@@ -775,7 +775,7 @@ with right:
         st.success(f"Signed in as {st.session_state.username}")
         if st.session_state.email:
             st.caption(st.session_state.email)
-        if st.button("Go to Dashboard", use_container_width=True, type="primary"):
+        if st.button("Go to Dashboard", width="stretch", type="primary"):
             st.switch_page("pages/dashboard.py")
     else:
         auth_card_container = st.container(key="auth_shell")
@@ -807,7 +807,7 @@ with right:
                     )
                     login_submit = st.form_submit_button(
                         "Sign in",
-                        use_container_width=True,
+                        width="stretch",
                         type="primary",
                     )
                     st.caption("Forgot password? Recovery options are coming soon.")
@@ -853,7 +853,7 @@ with right:
                     )
                     st.caption("Use at least 8 characters with uppercase, lowercase, number, and special symbol.")
                     agree_terms = st.checkbox("I agree to the Terms and Conditions", key="reg_terms")
-                    register_submit = st.form_submit_button("Register", use_container_width=True, type="primary")
+                    register_submit = st.form_submit_button("Register", width="stretch", type="primary")
 
                 if register_submit:
                     reg_user_clean = reg_user.strip()
