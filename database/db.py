@@ -36,6 +36,14 @@ def initialize_storage():
     UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 
+def _ensure_column(cursor: sqlite3.Cursor, table_name: str, column_name: str, ddl: str) -> None:
+    """Add a missing column in-place for older local databases."""
+    cursor.execute(f"PRAGMA table_info({table_name});")
+    existing_columns = {row[1] for row in cursor.fetchall()}
+    if column_name not in existing_columns:
+        cursor.execute(f"ALTER TABLE {table_name} ADD COLUMN {ddl};")
+
+
 # =========================
 # TABLE CREATION
 # =========================
@@ -58,6 +66,7 @@ def create_tables():
             username TEXT NOT NULL UNIQUE,
             email TEXT NOT NULL UNIQUE,
             password_hash TEXT NOT NULL,
+            profile_picture TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             last_login TIMESTAMP,
             is_active INTEGER DEFAULT 1,
@@ -65,6 +74,8 @@ def create_tables():
             account_locked INTEGER DEFAULT 0
         );
     """)
+
+    _ensure_column(cursor, "Users", "profile_picture", "profile_picture TEXT")
 
     # -------------------------
     # TRANSACTIONS TABLE

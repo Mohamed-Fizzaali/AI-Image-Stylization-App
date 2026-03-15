@@ -5,3 +5,6 @@ passlib==1.7.4
 pillow
 pandas
 numpy
+authlib
+python-dotenv
+requests

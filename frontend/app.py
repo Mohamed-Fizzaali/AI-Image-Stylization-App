@@ -2,6 +2,7 @@ import base64
 import sys
 from pathlib import Path
 
+
 import streamlit as st
 
 
@@ -11,7 +12,15 @@ if str(ROOT_DIR) not in sys.path:
 
 from backend.auth import register_user
 from backend.auth_login import login_user
+from backend.auth_google import get_google_auth_url, process_google_callback, REDIRECT_URI
 from database.db import create_tables
+from frontend.user_profile import (
+    sync_user_profile_state,
+    set_user_profile_state,
+    render_sidebar_profile,
+    clear_user_profile_state,
+)
+
 
 # ---------------------------------------------------------------------------
 # ASSET PATHS  (needed before set_page_config for the page icon)
@@ -264,6 +273,7 @@ def apply_styles() -> None:
         }
 
         [data-testid="stSidebarNav"] {
+            display: none !important;
             background: transparent !important;
             padding-top: 0.35rem !important;
         }
@@ -319,20 +329,6 @@ def apply_styles() -> None:
 
         [data-testid="stSidebarNav"] a {
             color: var(--ink-700) !important;
-        }
-
-        .side-head {
-            font-size: 1.1rem;
-            font-weight: 800;
-            margin-bottom: 0.3rem;
-            color: var(--ink-900);
-            letter-spacing: -0.01em;
-        }
-
-        .side-sub {
-            margin-bottom: 0.75rem;
-            color: var(--ink-500);
-            font-size: 0.84rem;
         }
 
         /* AUTH MODAL */
@@ -590,53 +586,6 @@ def apply_styles() -> None:
             box-shadow: 0 18px 34px rgba(59, 130, 246, 0.22) !important;
         }
 
-        /* BUG FIX 2: Old selector [class*="st-key-password_toggle_button_"] never
-           matched — the actual Streamlit class is st-key-{key}_toggle e.g.
-           st-key-login_password_toggle. Fixed to [class*="_password_toggle"]. */
-        .st-key-auth_shell [class*="_password_toggle"] button {
-            min-height: 3.3rem;
-            min-width: 3.3rem;
-            padding: 0 !important;
-            border: 1px solid #dbe3ef !important;
-            border-radius: 1rem !important;
-            background: #ffffff !important;
-            color: #64748b !important;
-            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9) !important;
-            display: inline-flex !important;
-            align-items: center !important;
-            justify-content: center !important;
-            transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
-        }
-
-        .st-key-auth_shell [class*="_password_toggle"] button:hover {
-            transform: translateY(-1px);
-            border-color: #9db6ff !important;
-            box-shadow: 0 10px 20px rgba(79, 125, 242, 0.14) !important;
-        }
-
-        .st-key-auth_shell [class*="_password_toggle"] button p {
-            display: none !important;
-        }
-
-        /* Make the eye SVG icon always visible */
-        .st-key-auth_shell [class*="_password_toggle"] button span,
-        .st-key-auth_shell [class*="_password_toggle"] button svg,
-        .st-key-auth_shell [class*="_password_toggle"] button path {
-            color: #64748b !important;
-            fill: #64748b !important;
-            stroke: #64748b !important;
-        }
-
-        /* Align the toggle column with the bottom of the input */
-        .st-key-auth_shell [class*="_password_toggle"] {
-            display: flex;
-            align-items: flex-end;
-            padding-bottom: 0;
-        }
-
-        .st-key-auth_shell [class*="_password_toggle"] > div {
-            width: 100%;
-        }
 
         .st-key-hero_cta_button {
             max-width: 19rem;
@@ -1110,6 +1059,10 @@ def render_auth_forms() -> None:
         st.rerun()
 
     def render_auth_intro(title, subtitle, google_text, divider_text):
+        google_url, state = get_google_auth_url(REDIRECT_URI)
+        st.session_state.oauth_state = state
+        
+        # Link style button that behaves and looks like the existing auth-social-btn
         st.markdown(
             f"""
             <div class="auth-shell-head">
@@ -1117,10 +1070,12 @@ def render_auth_forms() -> None:
                 <p class="auth-subtitle">{subtitle}</p>
             </div>
             <div class="auth-social-stack">
-                <div class="auth-social-btn">
-                    <span class="auth-social-icon google">G</span>
-                    <span>{google_text}</span>
-                </div>
+                <a href="{google_url}" target="_self" style="text-decoration: none; display: block;">
+                    <div class="auth-social-btn">
+                        <span class="auth-social-icon google">G</span>
+                        <span>{google_text}</span>
+                    </div>
+                </a>
             </div>
             <div class="auth-divider"><span>{divider_text}</span></div>
             """,
@@ -1128,32 +1083,12 @@ def render_auth_forms() -> None:
         )
 
     def render_password_input(label, key, placeholder, visibility_key):
-
-        password_visible = st.session_state.get(visibility_key, False)
-
-        input_col, toggle_col = st.columns([6,1], gap="small")
-
-        with input_col:
-            value = st.text_input(
-                label,
-                type="default" if password_visible else "password",
-                key=key,
-                placeholder=placeholder,
-            )
-
-        with toggle_col:
-            if st.button(
-                " ",
-                key=f"{key}_toggle",
-                icon=":material/visibility:" if password_visible else ":material/visibility_off:",
-                help="Hide password" if password_visible else "Show password",
-                type="tertiary",
-                width="stretch",
-            ):
-                st.session_state[visibility_key] = not password_visible
-                st.rerun()
-
-        return value
+        return st.text_input(
+            label,
+            type="password",
+            key=key,
+            placeholder=placeholder,
+        )
 
     # Fake tabs (same layout visually)
     tab1, tab2 = st.columns(2)
@@ -1207,7 +1142,7 @@ def render_auth_forms() -> None:
         login_submit = st.button(
             "Sign In",
             key="auth_submit_button_login",
-            width="stretch",
+            use_container_width=True,
             type="primary",
         )
 
@@ -1234,6 +1169,11 @@ def render_auth_forms() -> None:
                 st.session_state.username = result.get("username")
                 st.session_state.email = result.get("email")
                 st.session_state.user_id = result.get("user_id")
+                set_user_profile_state(
+                    user_name=result.get("username"),
+                    profile_image=None,
+                    login_method="local",
+                )
                 st.session_state.remember_me = bool(remember_me)
                 st.session_state.auth_modal_open = False
 
@@ -1287,7 +1227,7 @@ def render_auth_forms() -> None:
         register_submit = st.button(
             "Create Account",
             key="auth_submit_button_register",
-            width="stretch",
+            use_container_width=True,
             type="primary",
         )
 
@@ -1377,8 +1317,12 @@ defaults = {
     "logged_in": False,
     "authenticated": False,
     "username": None,
+    "user_name": None,
     "email": None,
     "user_id": None,
+    "profile_picture": None,
+    "profile_image": None,
+    "login_method": None,
     "remember_me": False,
     "auth_modal_open": False,
     "auth_tabs": "Sign In",
@@ -1390,40 +1334,60 @@ for key, value in defaults.items():
 auth_state = bool(st.session_state.get("logged_in") or st.session_state.get("authenticated"))
 st.session_state.logged_in = auth_state
 st.session_state.authenticated = auth_state
+sync_user_profile_state()
+
+# ==========================================
+# GOOGLE OAUTH CALLBACK HANDLING
+# ==========================================
+if "code" in st.query_params:
+    auth_code = st.query_params.get("code")
+    st.query_params.clear()  # Clear URL code param
+    
+    with st.spinner("Authenticating with Google..."):
+        oauth_state = st.session_state.get("oauth_state")
+        result = process_google_callback(auth_code, state=oauth_state, redirect_uri=REDIRECT_URI)
+        
+        if result.get("success"):
+            st.session_state.logged_in = True
+            st.session_state.authenticated = True
+            st.session_state.username = result.get("username")
+            st.session_state.email = result.get("email")
+            st.session_state.user_id = result.get("user_id")
+            set_user_profile_state(
+                user_name=result.get("name") or result.get("username"),
+                profile_image=result.get("profile_picture"),
+                login_method="google",
+            )
+                
+            st.session_state.auth_modal_open = False
+            st.success("Successfully signed in with Google!")
+            st.rerun()
+        else:
+            st.error(result.get("message", "Google login failed."))
 
 if "flash_message" in st.session_state:
     st.success(st.session_state.flash_message)
     del st.session_state.flash_message
 
 with st.sidebar:
-    st.markdown('<div class="side-head">Workspace</div>', unsafe_allow_html=True)
-    st.markdown(
-        '<div class="side-sub">Navigation and account actions</div>',
-        unsafe_allow_html=True,
-    )
-    st.markdown("---")
-
     request_auth_modal = bool(st.session_state.get("auth_modal_open"))
+    render_sidebar_profile()
 
     if st.session_state.authenticated:
-        st.success(f"Signed in as {st.session_state.username}")
-        if st.session_state.email:
-            st.caption(st.session_state.email)
-
-        if st.button("Open Dashboard", width="stretch", type="primary"):
+        if st.button("Open Dashboard", use_container_width=True, type="primary"):
             st.switch_page("pages/dashboard.py")
 
-        if st.button("Log out", width="stretch"):
+        if st.button("Log out", use_container_width=True):
+            clear_user_profile_state()
             st.session_state.logged_in = False
             st.session_state.authenticated = False
-            st.session_state.username = None
             st.session_state.email = None
             st.session_state.user_id = None
             st.session_state.remember_me = False
             st.session_state.auth_modal_open = False
             st.rerun()
     else:
-        if st.button("Sign In / Register", width="stretch", type="primary"):
+        if st.button("Sign In / Register", use_container_width=True, type="primary"):
             st.session_state.auth_modal_open = True
             request_auth_modal = True
 
@@ -1468,7 +1432,7 @@ with hero_showcase_shell:
             start_creating = st.button(
                 "Get Started Now →",
                 type="primary",
-                width="stretch",
+                use_container_width=True,
                 key="hero_get_started",
             )
             if start_creating:

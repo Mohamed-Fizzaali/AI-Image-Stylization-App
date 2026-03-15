@@ -1,6 +1,21 @@
 venv/
+.venv/
 __pycache__/
 *.pyc
 *.db
 uploads/
+
+# ── Secrets & Credentials ──────────────────────────────────────────────────
 .env
+*.env
+
+# Google OAuth JSON (downloaded from Google Cloud Console)
+backend/auth/google_credentials.json
+auth/google_credentials.json
+*credentials*.json
+*client_secret*.json
+
+# ── IDE / OS ───────────────────────────────────────────────────────────────
+.vscode/settings.json
+.DS_Store
+Thumbs.db
