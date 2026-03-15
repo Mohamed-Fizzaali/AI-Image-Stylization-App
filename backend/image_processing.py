@@ -8,7 +8,7 @@ the Streamlit UI layer can remain thin and focused on presentation.
 """
 
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 import cv2
 import numpy as np
@@ -687,7 +687,7 @@ def _sketch_from_array(
     return sketch
 
 
-def sketch_effect(image_path: str | Path, **kwargs: object) -> np.ndarray:
+def sketch_effect(image_path: str | Path, **kwargs: Any) -> np.ndarray:
     """
     Produce a grayscale pencil sketch effect from an image.
 
@@ -799,15 +799,14 @@ def pencil_color_effect(
         blended = np.clip(textured, 0, 255).astype(np.uint8)
 
     # Final light sharpening
-    if sharpen_amount > 0:
-        blurred = cv2.GaussianBlur(blended, (0, 0), sigmaX=1.0)
-        alpha = sharpen_amount
-        beta = 1.0 - alpha
-        final = cv2.addWeighted(blended, alpha, blurred, beta, 0)
-    else:
-        final = blended
+    if sharpen_amount > 1.0:
+        blur = cv2.GaussianBlur(blended, (0, 0), min(sharpen_amount, 3.0))
+        blended = cv2.addWeighted(
+            blended, sharpen_amount + 0.5, blur, -0.5, 0
+        )
 
-    return final
+    return blended
+
 
 def bgr_to_rgb(image: np.ndarray) -> np.ndarray:
     """

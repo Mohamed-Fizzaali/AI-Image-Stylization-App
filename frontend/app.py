@@ -13,6 +13,77 @@ from backend.auth import register_user
 from backend.auth_login import login_user
 from database.db import create_tables
 
+# ---------------------------------------------------------------------------
+# ASSET PATHS  (needed before set_page_config for the page icon)
+# ---------------------------------------------------------------------------
+assets_dir = Path(__file__).resolve().parent / "assets"
+icon_png = assets_dir / "artify_logo.png"
+logo_svg = assets_dir / "artify_logo.svg"
+logo_asset = logo_svg if logo_svg.exists() else icon_png
+before1_image = assets_dir / "before1.png"
+after1_image = assets_dir / "after1.png"
+before_image = assets_dir / "before.jpeg"
+cartoon_image = assets_dir / "cartoon_style.png"
+pencil_color_image = assets_dir / "pencil_color.png"
+sketch_image = assets_dir / "sketch_style.png"
+
+# ---------------------------------------------------------------------------
+# PAGE CONFIG  — must be the VERY FIRST Streamlit call
+# ---------------------------------------------------------------------------
+st.set_page_config(
+    page_title="Artify AI",
+    page_icon=str(icon_png) if icon_png.exists() else ":art:",
+    layout="wide",
+    initial_sidebar_state="collapsed",
+)
+
+# ---------------------------------------------------------------------------
+# PRIMER CSS — injected as the very first st.markdown call so the browser
+# sets a white background and fades the app in smoothly, eliminating the
+# "flash of old/default UI" before apply_styles() finishes executing.
+# ---------------------------------------------------------------------------
+st.markdown(
+    """
+    <style>
+    /* 1. Lock the background to white IMMEDIATELY so there is no colour flash */
+    html, body, .stApp,
+    [data-testid="stAppViewContainer"],
+    [data-testid="stMain"] {
+        background: #ffffff !important;
+        background-color: #ffffff !important;
+    }
+
+    /* 2. Start hidden; JS below will trigger the fade-in once Streamlit
+          has finished mounting the real content tree */
+    .stApp {
+        opacity: 0;
+        transition: opacity 280ms ease;
+    }
+    </style>
+    <script>
+    (function () {
+        // Poll until Streamlit's main content block is present, then reveal.
+        var attempts = 0;
+        function reveal() {
+            attempts++;
+            var app = document.querySelector('.stApp');
+            if (app) {
+                app.style.opacity = '1';
+            } else if (attempts < 60) {
+                requestAnimationFrame(reveal);
+            }
+        }
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', reveal);
+        } else {
+            reveal();
+        }
+    })();
+    </script>
+    """,
+    unsafe_allow_html=True,
+)
+
 
 def apply_styles() -> None:
     st.markdown(
@@ -20,20 +91,21 @@ def apply_styles() -> None:
         <style>
         @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap');
 
+        /* GLOBAL */
         :root {
-            --bg-top: #06101f;
-            --bg-mid: #0a1b31;
-            --bg-bottom: #102546;
-            --ink-900: #eaf2ff;
-            --ink-700: #c0cfe8;
-            --ink-500: #8ea3c3;
-            --brand-800: #0a4f66;
-            --brand-700: #0f7ea1;
-            --brand-500: #22d3ee;
-            --accent-500: #fb923c;
-            --card-bg: rgba(12, 24, 44, 0.8);
-            --card-stroke: rgba(125, 162, 206, 0.24);
-            --focus-ring: #7fe3ff;
+            --bg-top: #ffffff;
+            --bg-mid: #ffffff;
+            --bg-bottom: #f7f7f8;
+            --ink-900: #111111;
+            --ink-700: #222222;
+            --ink-500: #555555;
+            --brand-800: #111111;
+            --brand-700: #111111;
+            --brand-500: #111111;
+            --accent-500: #555555;
+            --card-bg: #ffffff;
+            --card-stroke: #e5e7eb;
+            --focus-ring: #111111;
         }
 
         html, body, .stApp {
@@ -41,6 +113,27 @@ def apply_styles() -> None:
             color: var(--ink-700);
             max-width: 100%;
             overflow-x: hidden !important;
+        }
+
+        html, body {
+            background: #ffffff;
+        }
+
+        .stApp {
+            background: #ffffff !important;
+            background-attachment: scroll;
+        }
+
+
+        [data-testid="stAppViewContainer"],
+        [data-testid="stMain"],
+        [data-testid="stMainBlockContainer"],
+        [data-testid="stVerticalBlock"],
+        [data-testid="stVerticalBlockBorderWrapper"],
+        [data-testid="stBottomBlockContainer"],
+        [data-testid="stFormSubmitButton"] {
+            background: transparent !important;
+            background-color: transparent !important;
         }
 
         h1, h2, h3, h4, h5, h6 {
@@ -51,497 +144,15 @@ def apply_styles() -> None:
             color: var(--ink-700);
         }
 
-        html, body {
-            background:
-                radial-gradient(circle at -2% -8%, rgba(34, 211, 238, 0.22), transparent 34%),
-                radial-gradient(circle at 103% 0%, rgba(251, 146, 60, 0.20), transparent 34%),
-                radial-gradient(circle at 70% 105%, rgba(59, 130, 246, 0.18), transparent 40%),
-                linear-gradient(160deg, var(--bg-top) 0%, var(--bg-mid) 46%, var(--bg-bottom) 100%) fixed;
-        }
-
-        .stApp {
-            background:
-                radial-gradient(circle at -2% -8%, rgba(34, 211, 238, 0.22), transparent 34%),
-                radial-gradient(circle at 103% 0%, rgba(251, 146, 60, 0.20), transparent 34%),
-                radial-gradient(circle at 70% 105%, rgba(59, 130, 246, 0.18), transparent 40%),
-                linear-gradient(160deg, var(--bg-top) 0%, var(--bg-mid) 46%, var(--bg-bottom) 100%);
-            background-attachment: fixed;
-        }
-
-        [data-testid="stSidebar"] {
-            border-right: 1px solid rgba(125, 162, 206, 0.24);
-            background: linear-gradient(180deg, rgba(5, 13, 31, 0.97) 0%, rgba(12, 28, 52, 0.95) 100%);
-            color: var(--ink-700);
-            backdrop-filter: blur(10px);
-        }
-
-        button[data-testid="collapsedControl"] {
-            background: rgba(7, 16, 32, 0.85) !important;
-            border: 1px solid rgba(125, 162, 206, 0.4) !important;
-            border-radius: 0.6rem !important;
-            min-width: 2.3rem !important;
-            min-height: 2.3rem !important;
-        }
-
-        button[data-testid="collapsedControl"] svg,
-        [data-testid="stSidebarNav"] svg {
-            fill: var(--ink-900) !important;
-            color: var(--ink-900) !important;
-        }
-
-        [data-testid="stSidebarNav"] a {
-            color: var(--ink-700) !important;
-        }
-
         .block-container {
             padding-top: 2.35rem;
             padding-bottom: 2.35rem;
             max-width: 1180px;
         }
 
-        .panel-card {
-            background: linear-gradient(165deg, rgba(12, 28, 52, 0.88) 0%, rgba(8, 20, 40, 0.9) 100%);
-            border: 1px solid rgba(92, 142, 198, 0.3);
-            border-radius: 1.2rem;
-            padding: 1.05rem;
-            box-shadow: 0 14px 28px rgba(2, 8, 28, 0.34);
-            animation: fadeInUp 380ms ease both;
-            position: relative;
-            overflow: hidden;
-            margin-bottom: 0.9rem;
-        }
-
-        .panel-card::before {
-            content: "";
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 2px;
-            background: linear-gradient(90deg, rgba(34, 211, 238, 0.85), rgba(59, 130, 246, 0.45), transparent);
-        }
-
-        .panel-title {
-            margin: 0;
-            color: var(--ink-900);
-            font-size: 1.08rem;
-            font-weight: 800;
-            letter-spacing: -0.02em;
-        }
-
-        .panel-sub {
-            margin: 0.25rem 0 0.8rem 0;
-            color: var(--ink-500);
-            font-size: 0.86rem;
-            line-height: 1.38;
-        }
-
-        .st-key-auth_shell {
-            background: linear-gradient(180deg, #ffffff 0%, #f6fbff 100%);
-            border: 1px solid #d8e6ff;
-            border-radius: 1.2rem;
-            padding: 1rem 1rem 0.9rem 1rem;
-            box-shadow: 0 16px 30px rgba(6, 23, 56, 0.2);
-            animation: fadeInUp 380ms ease both;
-            margin-bottom: 0.9rem;
-        }
-
-        .st-key-auth_shell .panel-title {
-            color: #0a1f3f !important;
-            font-size: 1.16rem;
-        }
-
-        .st-key-auth_shell .panel-sub {
-            color: #4e6388 !important;
-            margin-bottom: 0.58rem;
-        }
-
-        .st-key-auth_shell .auth-chip-row {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 0.35rem;
-            margin-bottom: 0.65rem;
-        }
-
-        .st-key-auth_shell .auth-chip {
-            display: inline-flex;
-            align-items: center;
-            border-radius: 999px;
-            border: 1px solid #c7daf9;
-            background: #f4f8ff;
-            color: #2a4c7c;
-            font-size: 0.72rem;
-            font-weight: 650;
-            padding: 0.2rem 0.6rem;
-        }
-
-        .st-key-auth_shell .auth-note {
-            margin: 0.38rem 0 0 0;
-            text-align: right;
-            color: #5170a0 !important;
-            font-size: 0.78rem;
-        }
-
-        .st-key-auth_shell label,
-        .st-key-auth_shell p,
-        .st-key-auth_shell .stCaptionContainer {
-            color: #1b355f !important;
-        }
-
-        .st-key-auth_shell [data-testid="stTabs"] [role="tablist"] {
-            gap: 0.35rem;
-            margin-bottom: 0.42rem;
-            background: #eaf2ff;
-            border: 1px solid #d0e1fb;
-            border-radius: 999px;
-            padding: 0.2rem;
-        }
-
-        .st-key-auth_shell [data-testid="stTabs"] [role="tab"] {
-            border-radius: 999px;
-            border: 1px solid transparent;
-            background: transparent;
-            color: #1f4276;
-            padding: 0.3rem 0.88rem;
-        }
-
-        .st-key-auth_shell [data-testid="stTabs"] [role="tab"][aria-selected="true"] {
-            background: linear-gradient(135deg, #0e7490 0%, #22d3ee 100%);
-            border-color: transparent;
-            color: #03101f;
-            font-weight: 700;
-        }
-
-        .st-key-auth_shell [data-testid="stTabs"] [data-baseweb="tab-panel"] {
-            padding-top: 0.4rem;
-        }
-
-        .side-head {
-            font-size: 1.1rem;
-            font-weight: 800;
-            margin-bottom: 0.3rem;
-            color: var(--ink-900);
-            letter-spacing: -0.01em;
-        }
-
-        .side-sub {
-            margin-bottom: 0.75rem;
-            color: var(--ink-500);
-            font-size: 0.84rem;
-        }
-
-        form {
-            background: rgba(8, 19, 36, 0.72);
-            border: 1px solid rgba(125, 162, 206, 0.24);
-            border-radius: 1rem;
-            padding: 0.85rem 0.85rem 0.55rem 0.85rem;
-        }
-
-        .st-key-auth_shell form {
-            background: transparent;
-            border: none;
-            border-radius: 0;
-            padding: 0;
-        }
-
-        /* Default dark inputs outside the auth shell */
-        input[type="text"],
-        input[type="password"],
-        input[type="email"] {
-            border-radius: 0.72rem;
-            border: 1px solid rgba(125, 162, 206, 0.32);
-            background: rgba(5, 13, 31, 0.74);
-            color: var(--ink-900);
-        }
-
-        /* Streamlit wraps text/password fields; style wrapper only once to avoid double-layer boxes */
-        .st-key-auth_shell [data-baseweb="input"] {
-            border: 1px solid #c4d8f7 !important;
-            border-radius: 0.72rem !important;
-            background: #ffffff !important;
-            box-shadow: none !important;
-        }
-
-        .st-key-auth_shell [data-baseweb="input"] > div {
-            background: transparent !important;
-            border: none !important;
-            box-shadow: none !important;
-        }
-
-        .st-key-auth_shell input[type="text"],
-        .st-key-auth_shell input[type="password"],
-        .st-key-auth_shell input[type="email"] {
-            background: transparent !important;
-            border: none !important;
-            box-shadow: none !important;
-            color: #0d274f !important;
-        }
-
-        .st-key-auth_shell [data-testid="stCheckbox"] label p {
-            font-size: 0.82rem;
-        }
-
-        .st-key-auth_shell [data-testid="stFormSubmitButton"] button {
-            font-weight: 700;
-            border-radius: 0.72rem;
-            min-height: 2.58rem;
-        }
-
-        input[type="text"]::placeholder,
-        input[type="password"]::placeholder,
-        input[type="email"]::placeholder {
-            color: var(--ink-500);
-        }
-
-        input[type="text"]:focus-visible,
-        input[type="password"]:focus-visible,
-        input[type="email"]:focus-visible,
-        textarea:focus-visible,
-        button:focus-visible,
-        a:focus-visible {
-            outline: 2px solid var(--focus-ring) !important;
-            outline-offset: 2px !important;
-            box-shadow: none !important;
-        }
-
-        input[type="text"]:focus,
-        input[type="password"]:focus,
-        input[type="email"]:focus {
-            border-color: rgba(34, 211, 238, 0.75);
-            box-shadow: 0 0 0 1px rgba(34, 211, 238, 0.35);
-        }
-
-        .st-key-auth_shell [data-baseweb="input"]:focus-within {
-            border-color: #67b5f6 !important;
-            box-shadow: 0 0 0 1px rgba(41, 130, 210, 0.3) !important;
-        }
-
-        .brand-kicker {
-            display: inline-block;
-            background: rgba(14, 116, 144, 0.22);
-            color: #8de9ff;
-            border: 1px solid rgba(34, 211, 238, 0.35);
-            border-radius: 999px;
-            padding: 0.34rem 0.9rem;
-            font-size: 0.72rem;
-            letter-spacing: 0.095em;
-            text-transform: uppercase;
-            font-weight: 700;
-            margin-bottom: 0.7rem;
-        }
-
-        .hero-title {
-            font-size: clamp(2.15rem, 3.8vw, 3.35rem);
-            line-height: 1.02;
-            font-weight: 800;
-            color: var(--ink-900);
-            letter-spacing: -0.03em;
-            margin: 0 0 0.62rem 0;
-            white-space: normal !important;
-            word-break: break-word;
-            max-width: 16ch;
-        }
-
-        .hero-sub {
-            color: var(--ink-700);
-            font-size: 1.02rem;
-            line-height: 1.45;
-            margin-bottom: 0.82rem;
-            max-width: 48ch;
-        }
-
-        .stat-row {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 0.45rem;
-            margin-bottom: 0.9rem;
-        }
-
-        .stat-chip {
-            display: inline-flex;
-            align-items: center;
-            padding: 0.28rem 0.62rem;
-            border-radius: 999px;
-            background: rgba(8, 20, 38, 0.74);
-            border: 1px solid rgba(125, 162, 206, 0.34);
-            color: var(--ink-700);
-            font-size: 0.77rem;
-            font-weight: 650;
-        }
-
-        .spotlight-card {
-            background: linear-gradient(165deg, rgba(12, 28, 52, 0.88) 0%, rgba(8, 20, 40, 0.9) 100%);
-            border: 1px solid rgba(92, 142, 198, 0.3);
-            border-radius: 1.2rem;
-            padding: 1rem 1.05rem;
-            backdrop-filter: blur(4px);
-            box-shadow: 0 14px 28px rgba(2, 8, 28, 0.34);
-            animation: fadeInUp 380ms ease both;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .spotlight-card::before {
-            content: "";
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 2px;
-            background: linear-gradient(90deg, rgba(34, 211, 238, 0.85), rgba(59, 130, 246, 0.45), transparent);
-        }
-
-        .spotlight-card h4 {
-            margin: 0 0 0.35rem 0;
-            color: var(--ink-900);
-            font-size: 1rem;
-        }
-
-        .spotlight-card p {
-            margin: 0;
-            color: var(--ink-700);
-            font-size: 0.88rem;
-            line-height: 1.42;
-        }
-
-        .proof-card {
-            background: linear-gradient(165deg, rgba(9, 22, 42, 0.86) 0%, rgba(7, 18, 36, 0.88) 100%);
-            border: 1px solid rgba(92, 142, 198, 0.28);
-            border-radius: 1rem;
-            padding: 0.8rem;
-            box-shadow: 0 12px 22px rgba(2, 8, 28, 0.3);
-            animation: fadeInUp 440ms ease both;
-        }
-
-        .proof-image {
-            width: 100%;
-            aspect-ratio: 16 / 10;
-            border-radius: 0.72rem;
-            border: 1px solid rgba(125, 162, 206, 0.34);
-            margin-bottom: 0.62rem;
-        }
-
-        .proof-img-tag {
-            width: 100%;
-            aspect-ratio: 16 / 10;
-            object-fit: cover;
-            border-radius: 0.72rem;
-            border: 1px solid rgba(125, 162, 206, 0.34);
-            margin-bottom: 0.62rem;
-            display: block;
-        }
-
-        .proof-before {
-            background:
-                radial-gradient(circle at 35% 30%, rgba(160, 196, 255, 0.45), transparent 36%),
-                linear-gradient(150deg, rgba(19, 35, 66, 1) 0%, rgba(10, 24, 46, 1) 100%);
-        }
-
-        .proof-after {
-            background:
-                radial-gradient(circle at 70% 24%, rgba(34, 211, 238, 0.42), transparent 34%),
-                linear-gradient(150deg, rgba(18, 75, 104, 0.95) 0%, rgba(12, 42, 79, 0.98) 100%);
-        }
-
-        .proof-alt {
-            background:
-                radial-gradient(circle at 28% 68%, rgba(251, 146, 60, 0.38), transparent 36%),
-                linear-gradient(140deg, rgba(74, 46, 108, 0.95) 0%, rgba(18, 33, 74, 0.98) 100%);
-        }
-
-        .proof-card h4 {
-            margin: 0 0 0.2rem 0;
-            font-size: 0.98rem;
-            color: var(--ink-900);
-        }
-
-        .proof-card p {
-            margin: 0;
-            font-size: 0.84rem;
-            color: var(--ink-700);
-            line-height: 1.38;
-        }
-
-        .feature-card {
-            background: linear-gradient(165deg, rgba(9, 22, 42, 0.86) 0%, rgba(7, 18, 36, 0.88) 100%);
-            border: 1px solid rgba(92, 142, 198, 0.28);
-            border-radius: 1.2rem;
-            padding: 0.95rem 1rem;
-            min-height: 112px;
-            transition: transform 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
-            box-shadow: 0 12px 22px rgba(2, 8, 28, 0.32);
-            animation: fadeInUp 430ms ease both;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .feature-card::before {
-            content: "";
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 3px;
-            height: 100%;
-            background: linear-gradient(180deg, rgba(34, 211, 238, 0.85), rgba(59, 130, 246, 0.4));
-        }
-
-        .feature-card:hover {
-            transform: translateY(-3px);
-            border-color: rgba(34, 211, 238, 0.48);
-            box-shadow: 0 14px 28px rgba(2, 6, 23, 0.34);
-        }
-
-        .feature-card h4 {
-            color: var(--ink-900);
-            margin: 0 0 0.24rem 0;
-            font-size: 1.1rem;
-        }
-
-        .feature-card p {
-            color: var(--ink-700);
-            margin: 0;
-            font-size: 0.86rem;
-            line-height: 1.4;
-        }
-
-        .section-title {
-            margin-top: 0.3rem;
-            margin-bottom: 0.65rem;
-            color: var(--ink-900);
-            font-size: 1.08rem;
-            font-weight: 800;
-            letter-spacing: -0.02em;
-        }
-
-        button[data-testid="baseButton-primary"] {
-            background: linear-gradient(135deg, #0e7490 0%, #22d3ee 100%);
-            border: none;
-            color: #03101f;
-            font-weight: 700;
-            border-radius: 0.72rem;
-            box-shadow: 0 10px 22px rgba(34, 211, 238, 0.20);
-        }
-
-        button[data-testid="baseButton-primary"]:hover {
-            filter: brightness(1.03);
-            transform: translateY(-1px);
-        }
-
-        button[data-testid="baseButton-primary"]:active,
-        button[data-testid="baseButton-secondary"]:active {
-            transform: translateY(0);
-        }
-
-        button[data-testid="baseButton-secondary"] {
-            border-radius: 0.72rem;
-            border: 1px solid rgba(125, 162, 206, 0.45);
-            color: var(--ink-900);
-            background: rgba(8, 20, 38, 0.66);
-        }
-
         .stAlert {
             border-radius: 0.8rem;
-            border: 1px solid rgba(125, 162, 206, 0.32);
+            border: 1px solid #e5e7eb;
         }
 
         [data-testid="stLogo"] img,
@@ -569,6 +180,779 @@ def apply_styles() -> None:
             }
         }
 
+        /* HEADER */
+        [data-testid="stHeader"] {
+            background: rgba(255, 255, 255, 0.92) !important;
+            border-bottom: 1px solid rgba(229, 231, 235, 0.85) !important;
+            box-shadow: none !important;
+        }
+
+        [data-testid="stToolbar"] {
+            background: transparent !important;
+        }
+
+        [data-testid="stDecoration"] {
+            background: transparent !important;
+        }
+
+        .st-key-hero_showcase_shell {
+            position: relative;
+            padding: clamp(0.6rem, 1.2vw, 1.1rem) 0 2.2rem 0;
+        }
+
+        .st-key-hero_showcase_shell > div {
+            position: relative;
+        }
+
+        .st-key-hero_showcase_shell > div::before {
+            content: "";
+            position: absolute;
+            right: 4%;
+            top: 2%;
+            width: 18rem;
+            height: 18rem;
+            border-radius: 999px;
+            background: radial-gradient(circle, rgba(77, 127, 245, 0.14) 0%, rgba(77, 127, 245, 0) 72%);
+            filter: blur(10px);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .st-key-hero_showcase_shell > div > div {
+            position: relative;
+            z-index: 1;
+        }
+
+        .artify-hero-copy {
+            max-width: 36rem;
+            padding-top: clamp(0.6rem, 2vw, 2.3rem);
+        }
+
+        .artify-hero-title {
+            margin: 0;
+            font-size: clamp(3rem, 6vw, 5.2rem);
+            line-height: 0.98;
+            font-weight: 800;
+            letter-spacing: -0.055em;
+            color: #1f2937;
+        }
+
+        .artify-hero-gradient,
+        .artify-hero-accent {
+            background: linear-gradient(135deg, #4f7df2 0%, #1ab6df 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .artify-hero-desc {
+            margin: 1.6rem 0 0 0;
+            max-width: 32rem;
+            color: #5b667a;
+            font-size: 1.08rem;
+            line-height: 1.7;
+        }
+
+        /* SIDEBAR */
+        [data-testid="stSidebar"] {
+            border-right: 1px solid #e5e7eb !important;
+            background: #ffffff !important;
+            color: var(--ink-700);
+            backdrop-filter: none;
+            padding-top: 0.35rem !important;
+        }
+
+        [data-testid="stSidebarNav"] {
+            background: transparent !important;
+            padding-top: 0.35rem !important;
+        }
+
+        [data-testid="stSidebarNavItems"] {
+            gap: 0.2rem !important;
+            padding-top: 0.15rem !important;
+        }
+
+        [data-testid="stSidebarNavLink"] {
+            background: transparent !important;
+            border-radius: 0.9rem !important;
+            color: #334155 !important;
+            padding: 0.55rem 0.75rem !important;
+        }
+
+        [data-testid="stSidebarNavLink"]:hover,
+        [data-testid="stSidebarNavLink"][aria-current="page"] {
+            background: #f8fafc !important;
+            color: #0f172a !important;
+        }
+
+        [data-testid="stSidebar"] > div:first-child,
+        [data-testid="stSidebarContent"] {
+            background: #ffffff !important;
+        }
+
+        button[data-testid="collapsedControl"] {
+            background: #ffffff !important;
+            border: 1px solid #dbe3ef !important;
+            border-radius: 0.6rem !important;
+            min-width: 2.3rem !important;
+            min-height: 2.3rem !important;
+            box-shadow: 0 8px 18px rgba(148, 163, 184, 0.16) !important;
+            /* BUG FIX 3: color must be set so the SVG icon inherits currentColor */
+            color: #24324a !important;
+        }
+
+        button[data-testid="collapsedControl"] svg,
+        [data-testid="stSidebarNav"] svg {
+            fill: #24324a !important;
+            color: #24324a !important;
+            stroke: #24324a !important;
+        }
+
+        /* Ensure the icon span/path inside the collapsed control is visible */
+        button[data-testid="collapsedControl"] span,
+        button[data-testid="collapsedControl"] path {
+            fill: #24324a !important;
+            stroke: #24324a !important;
+            color: #24324a !important;
+        }
+
+        [data-testid="stSidebarNav"] a {
+            color: var(--ink-700) !important;
+        }
+
+        .side-head {
+            font-size: 1.1rem;
+            font-weight: 800;
+            margin-bottom: 0.3rem;
+            color: var(--ink-900);
+            letter-spacing: -0.01em;
+        }
+
+        .side-sub {
+            margin-bottom: 0.75rem;
+            color: var(--ink-500);
+            font-size: 0.84rem;
+        }
+
+        /* AUTH MODAL */
+        .st-key-auth_shell {
+            max-width: 33rem;
+            margin: 0 auto;
+            background: linear-gradient(180deg, #ffffff 0%, #fcfdff 100%);
+            border: 1px solid #edf2f7;
+            border-radius: 1.9rem;
+            padding: 1.25rem 1.35rem 1.3rem 1.35rem;
+            box-shadow: 0 30px 80px rgba(59, 130, 246, 0.14);
+            animation: fadeInUp 380ms ease both;
+        }
+
+        .st-key-auth_shell label,
+        .st-key-auth_shell p,
+        .st-key-auth_shell .stCaptionContainer {
+            color: var(--ink-700) !important;
+        }
+
+        .auth-shell-head {
+            text-align: center;
+            margin-bottom: 1.1rem;
+        }
+
+        .auth-title {
+            margin: 0;
+            color: #24324a;
+            font-size: clamp(2rem, 4vw, 2.45rem);
+            line-height: 1.02;
+            letter-spacing: -0.04em;
+            font-weight: 800;
+        }
+
+        .auth-subtitle {
+            margin: 0.72rem 0 0 0;
+            color: #64748b;
+            font-size: 0.99rem;
+            line-height: 1.55;
+        }
+
+        .auth-social-stack {
+            display: grid;
+            gap: 0.72rem;
+            margin: 1.15rem 0 1.1rem 0;
+        }
+
+        .auth-social-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.72rem;
+            min-height: 3.35rem;
+            border-radius: 1rem;
+            border: 1px solid #dbe3ef;
+            background: #ffffff;
+            color: #24324a;
+            font-size: 0.97rem;
+            font-weight: 700;
+            box-shadow: 0 8px 18px rgba(148, 163, 184, 0.12);
+            transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+        }
+
+        .auth-social-btn:hover {
+            transform: translateY(-1px);
+            border-color: #c7d6f4;
+            box-shadow: 0 12px 24px rgba(148, 163, 184, 0.18);
+        }
+
+        .auth-social-icon {
+            width: 1.6rem;
+            height: 1.6rem;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 999px;
+            font-size: 0.92rem;
+            font-weight: 800;
+            line-height: 1;
+        }
+
+        .auth-social-icon.google {
+            color: #4285f4;
+        }
+
+        .auth-divider {
+            display: flex;
+            align-items: center;
+            gap: 0.8rem;
+            margin: 1rem 0 1.2rem 0;
+            color: #64748b;
+            font-size: 0.9rem;
+            font-weight: 600;
+        }
+
+        .auth-divider::before,
+        .auth-divider::after {
+            content: "";
+            flex: 1;
+            height: 1px;
+            background: #dbe3ef;
+        }
+
+        .auth-text-link,
+        .auth-bottom-note {
+            margin: 0;
+            color: #64748b;
+            font-size: 0.92rem;
+            line-height: 1.55;
+        }
+
+        .auth-text-link {
+            text-align: right;
+            font-weight: 700;
+            color: #2563eb;
+        }
+
+        .auth-bottom-note {
+            margin-top: 1rem;
+            text-align: center;
+        }
+
+        .auth-close-note {
+            margin: 0.85rem 0 0 0;
+            text-align: center;
+            color: #94a3b8;
+            font-size: 0.82rem;
+        }
+
+        /* FIX: Keep Streamlit modal structure intact */
+        div[data-testid="stDialog"] div[role="dialog"] {
+            background: #ffffff !important;
+            border-radius: 1.6rem !important;
+            border: 1px solid #e5e7eb !important;
+            box-shadow: 0 30px 80px rgba(0,0,0,0.15) !important;
+        }
+
+        div[data-testid="stDialog"] [data-testid="stDialogContent"] {
+            background: transparent !important;
+        }
+
+        /* INPUTS */
+        input[type="text"],
+        input[type="password"],
+        input[type="email"] {
+            border-radius: 0.72rem;
+            border: 1px solid #e5e7eb;
+            background: #ffffff;
+            color: var(--ink-900);
+        }
+
+        /* Streamlit wraps text/password fields; style wrapper only once to avoid double-layer boxes */
+        .st-key-auth_shell [data-baseweb="input"] {
+            min-height: 3.3rem;
+            border: 1px solid #dbe3ef !important;
+            border-radius: 1rem !important;
+            background: #ffffff !important;
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9) !important;
+        }
+
+        .st-key-auth_shell [data-baseweb="input"] > div {
+            background: transparent !important;
+            border: none !important;
+            box-shadow: none !important;
+        }
+
+        .st-key-auth_shell input[type="text"],
+        .st-key-auth_shell input[type="password"],
+        .st-key-auth_shell input[type="email"] {
+            background: transparent !important;
+            border: none !important;
+            box-shadow: none !important;
+            color: #111827 !important;
+            font-size: 0.96rem !important;
+        }
+
+        .st-key-auth_shell [data-testid="stCheckbox"] label p {
+            font-size: 0.84rem;
+            line-height: 1.5;
+            color: #374151 !important;
+        }
+
+        .st-key-auth_shell [data-testid="stCheckbox"] input[type="checkbox"] {
+            accent-color: #4f7df2 !important;
+        }
+
+        .st-key-auth_shell [data-testid="stCheckbox"] [data-baseweb="checkbox"] > div:first-of-type {
+            border-color: #cbd5e1 !important;
+            background: #ffffff !important;
+        }
+
+        .st-key-auth_shell [data-testid="stCheckbox"] [data-baseweb="checkbox"] input:checked + div {
+            border-color: #4f7df2 !important;
+            background: #4f7df2 !important;
+        }
+
+        .st-key-auth_shell [data-testid="stCheckbox"] [data-baseweb="checkbox"] input:checked + div svg {
+            stroke: #ffffff !important;
+            fill: #ffffff !important;
+            color: #ffffff !important;
+        }
+
+        input[type="text"]::placeholder,
+        input[type="password"]::placeholder,
+        input[type="email"]::placeholder {
+            color: var(--ink-500);
+        }
+
+        input[type="text"]:focus-visible,
+        input[type="password"]:focus-visible,
+        input[type="email"]:focus-visible,
+        textarea:focus-visible,
+        button:focus-visible,
+        a:focus-visible {
+            outline: 2px solid var(--focus-ring) !important;
+            outline-offset: 2px !important;
+            box-shadow: none !important;
+        }
+
+        input[type="text"]:focus,
+        input[type="password"]:focus,
+        input[type="email"]:focus {
+            border-color: #111111;
+            box-shadow: 0 0 0 1px rgba(17, 17, 17, 0.12);
+        }
+
+        .st-key-auth_shell [data-baseweb="input"]:focus-within {
+            border-color: #9db6ff !important;
+            box-shadow: 0 0 0 4px rgba(77, 127, 245, 0.12) !important;
+        }
+
+        /* BUTTONS */
+        .st-key-auth_shell [data-testid="stFormSubmitButton"] button,
+        .st-key-auth_shell [class*="st-key-auth_submit_button_"] button {
+            font-weight: 800;
+            border-radius: 1rem !important;
+            min-height: 3.3rem;
+            border: none !important;
+            background: linear-gradient(135deg, #4f7df2 0%, #18b8df 100%) !important;
+            color: #ffffff !important;
+            box-shadow: 0 16px 30px rgba(59, 130, 246, 0.18) !important;
+            transition: transform 180ms ease, box-shadow 180ms ease;
+        }
+
+        .st-key-auth_shell [data-testid="stFormSubmitButton"] button p,
+        .st-key-auth_shell [data-testid="stFormSubmitButton"] button span,
+        .st-key-auth_shell [class*="st-key-auth_submit_button_"] button p,
+        .st-key-auth_shell [class*="st-key-auth_submit_button_"] button span {
+            color: #ffffff !important;
+        }
+
+        .st-key-auth_shell [data-testid="stFormSubmitButton"] button:hover,
+        .st-key-auth_shell [class*="st-key-auth_submit_button_"] button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 18px 34px rgba(59, 130, 246, 0.22) !important;
+        }
+
+        /* BUG FIX 2: Old selector [class*="st-key-password_toggle_button_"] never
+           matched — the actual Streamlit class is st-key-{key}_toggle e.g.
+           st-key-login_password_toggle. Fixed to [class*="_password_toggle"]. */
+        .st-key-auth_shell [class*="_password_toggle"] button {
+            min-height: 3.3rem;
+            min-width: 3.3rem;
+            padding: 0 !important;
+            border: 1px solid #dbe3ef !important;
+            border-radius: 1rem !important;
+            background: #ffffff !important;
+            color: #64748b !important;
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9) !important;
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+        }
+
+        .st-key-auth_shell [class*="_password_toggle"] button:hover {
+            transform: translateY(-1px);
+            border-color: #9db6ff !important;
+            box-shadow: 0 10px 20px rgba(79, 125, 242, 0.14) !important;
+        }
+
+        .st-key-auth_shell [class*="_password_toggle"] button p {
+            display: none !important;
+        }
+
+        /* Make the eye SVG icon always visible */
+        .st-key-auth_shell [class*="_password_toggle"] button span,
+        .st-key-auth_shell [class*="_password_toggle"] button svg,
+        .st-key-auth_shell [class*="_password_toggle"] button path {
+            color: #64748b !important;
+            fill: #64748b !important;
+            stroke: #64748b !important;
+        }
+
+        /* Align the toggle column with the bottom of the input */
+        .st-key-auth_shell [class*="_password_toggle"] {
+            display: flex;
+            align-items: flex-end;
+            padding-bottom: 0;
+        }
+
+        .st-key-auth_shell [class*="_password_toggle"] > div {
+            width: 100%;
+        }
+
+        .st-key-hero_cta_button {
+            max-width: 19rem;
+            margin-top: 2rem;
+        }
+
+        .st-key-hero_cta_button button {
+            min-height: 4rem;
+            border: none !important;
+            border-radius: 999px !important;
+            background: linear-gradient(90deg, #4d7ff5 0%, #18b5df 100%) !important;
+            color: #ffffff !important;
+            font-size: 1.12rem !important;
+            font-weight: 800 !important;
+            box-shadow: 0 18px 42px rgba(77, 127, 245, 0.25) !important;
+            transition: transform 180ms ease, box-shadow 180ms ease !important;
+        }
+
+        .st-key-hero_cta_button button:hover {
+            transform: scale(1.04);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.18) !important;
+        }
+
+        /* CARDS */
+        .artify-preview-card {
+            text-align: center;
+        }
+
+        .artify-preview-card.is-stylized {
+            margin-top: 2.7rem;
+        }
+
+        .artify-preview-frame {
+            padding: 0.42rem;
+            border-radius: 2rem;
+            background: #ffffff;
+            box-shadow: 0 20px 52px rgba(148, 163, 184, 0.2);
+            transition: transform 220ms ease, box-shadow 220ms ease;
+            will-change: transform, box-shadow;
+        }
+
+        .artify-preview-frame.original {
+            border: 3px solid rgba(255, 227, 190, 0.96);
+        }
+
+        .artify-preview-frame.stylized {
+            border: 3px solid rgba(201, 229, 255, 0.98);
+        }
+
+        .artify-preview-image,
+        .artify-preview-placeholder {
+            width: 100%;
+            aspect-ratio: 4 / 5;
+            display: block;
+            border-radius: 1.55rem;
+            object-fit: cover;
+            background: #f4f5f7;
+        }
+
+        .artify-preview-image.is-stylized {
+            filter: saturate(1.18) contrast(1.06) brightness(1.02);
+        }
+
+        .artify-preview-image {
+            transition: transform 220ms ease;
+            will-change: transform;
+        }
+
+        .artify-preview-frame:hover {
+            transform: scale(1.05);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+        }
+
+        .artify-preview-frame:hover .artify-preview-image {
+            transform: scale(1.05);
+        }
+
+        .artify-preview-placeholder {
+            border: 1px solid #e5e7eb;
+            background: linear-gradient(145deg, #eef2f7, #f8fafc);
+        }
+
+        .artify-preview-chip {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin-top: 1rem;
+            padding: 0.72rem 1.35rem;
+            border-radius: 999px;
+            background: #ffffff;
+            color: #5b667a;
+            font-size: 0.98rem;
+            font-weight: 700;
+            box-shadow: 0 10px 24px rgba(148, 163, 184, 0.18);
+        }
+
+        .artify-preview-chip.stylized {
+            background: linear-gradient(90deg, #4d7ff5 0%, #18b5df 100%);
+            color: #ffffff;
+        }
+
+        .proof-card {
+            background: #ffffff;
+            border: 1px solid #e5e7eb;
+            border-radius: 1rem;
+            padding: 0.8rem;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+            animation: fadeInUp 440ms ease both;
+        }
+
+        .proof-image {
+            width: 100%;
+            aspect-ratio: 16 / 10;
+            border-radius: 0.72rem;
+            border: 1px solid #e5e7eb;
+            margin-bottom: 0.62rem;
+        }
+
+        .proof-img-tag {
+            width: 100%;
+            aspect-ratio: 16 / 10;
+            object-fit: cover;
+            border-radius: 0.72rem;
+            border: 1px solid #e5e7eb;
+            margin-bottom: 0.62rem;
+            display: block;
+        }
+
+        .proof-before,
+        .proof-after,
+        .proof-alt {
+            background: #f7f7f8;
+        }
+
+        .proof-card h4 {
+            margin: 0 0 0.2rem 0;
+            font-size: 0.98rem;
+            color: var(--ink-900);
+        }
+
+        .proof-card p {
+            margin: 0;
+            font-size: 0.84rem;
+            color: var(--ink-700);
+            line-height: 1.38;
+        }
+
+        .how-works-intro {
+            text-align: center;
+            margin: 0 auto 1.9rem auto;
+            max-width: 46rem;
+        }
+
+        .how-works-title {
+            margin: 0;
+            color: #1f2937;
+            font-size: clamp(2.1rem, 4.6vw, 3.45rem);
+            line-height: 1.02;
+            letter-spacing: -0.045em;
+            font-weight: 800;
+        }
+
+        .how-works-sub {
+            margin: 0.9rem auto 0 auto;
+            color: #66758c;
+            font-size: 1.06rem;
+            line-height: 1.65;
+            max-width: 42rem;
+        }
+
+        .how-works-card {
+            position: relative;
+            height: 100%;
+            min-height: 18.7rem;
+            padding: 2rem 1.4rem 1.6rem 1.4rem;
+            border-radius: 1.7rem;
+            border: 1px solid #eef2f7;
+            background: linear-gradient(180deg, #ffffff 0%, #ffffff 68%, #fbfcff 100%);
+            box-shadow: 0 22px 48px rgba(148, 163, 184, 0.14);
+            transition: transform 220ms ease, box-shadow 220ms ease, border-color 220ms ease;
+            overflow: hidden;
+        }
+
+        .how-works-card:hover {
+            transform: translateY(-8px);
+            border-color: #dce6fb;
+            box-shadow: 0 30px 62px rgba(148, 163, 184, 0.22);
+        }
+
+        .how-works-card::after {
+            content: "";
+            position: absolute;
+            inset: auto 1.4rem 0.95rem 1.4rem;
+            height: 0.3rem;
+            border-radius: 999px;
+            background: linear-gradient(90deg, rgba(255, 255, 255, 0), rgba(226, 232, 240, 0.8), rgba(255, 255, 255, 0));
+            pointer-events: none;
+        }
+
+        .how-works-icon {
+            width: 5.05rem;
+            height: 5.05rem;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 1.35rem;
+            color: #ffffff;
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 1.6rem;
+            box-shadow: 0 16px 34px rgba(148, 163, 184, 0.2);
+        }
+
+        .how-works-icon.upload {
+            background: linear-gradient(135deg, #4f84f5 0%, #5ca2ff 100%);
+        }
+
+        .how-works-icon.stylize {
+            background: linear-gradient(135deg, #18b8df 0%, #34c6e2 100%);
+        }
+
+        .how-works-icon.preview {
+            background: linear-gradient(135deg, #f255a5 0%, #ea5a9b 100%);
+        }
+
+        .how-works-icon.save {
+            background: linear-gradient(135deg, #8b5cf6 0%, #9a6df7 100%);
+        }
+
+        .how-works-card-title {
+            margin: 0 0 0.9rem 0;
+            color: #163055;
+            font-size: 1.02rem;
+            line-height: 1.2;
+            font-weight: 800;
+        }
+
+        .how-works-card-desc {
+            margin: 0;
+            color: #5d6c83;
+            font-size: 0.94rem;
+            line-height: 1.7;
+            max-width: 16rem;
+        }
+
+        .section-title {
+            margin-top: 0.3rem;
+            margin-bottom: 0.65rem;
+            color: var(--ink-900);
+            font-size: 1.08rem;
+            font-weight: 800;
+            letter-spacing: -0.02em;
+        }
+
+        /* TABS — fix: no CSS existed for these; Streamlit's dark-theme defaults were winning */
+        [data-testid="stTabs"] {
+            background: transparent !important;
+        }
+
+        [data-testid="stTabs"] [data-baseweb="tab-list"] {
+            background: transparent !important;
+            border-bottom: 2px solid #e5e7eb;
+        }
+
+        [data-testid="stTabs"] button[role="tab"] {
+            background: transparent !important;
+            color: #64748b !important;
+            border: none !important;
+            border-radius: 0 !important;
+            font-weight: 600;
+            font-size: 0.95rem;
+        }
+
+        [data-testid="stTabs"] button[role="tab"][aria-selected="true"] {
+            color: #111111 !important;
+            border-bottom: 2px solid #111111 !important;
+            background: transparent !important;
+        }
+
+        [data-testid="stTabs"] button[role="tab"]:hover {
+            background: #f8fafc !important;
+            color: #111111 !important;
+        }
+
+        [data-testid="stTabContent"] {
+            background: transparent !important;
+        }
+
+        /* AUTH SHELL plain st.button() "Sign In" / "Register" fake-tab buttons */
+        .st-key-auth_shell [data-testid="baseButton-secondary"],
+        .st-key-auth_shell [data-testid="baseButton-secondary"] button {
+            background: #f1f5f9 !important;
+            color: #334155 !important;
+            border: 1px solid #dbe3ef !important;
+            border-radius: 0.85rem !important;
+        }
+
+        .st-key-auth_shell [data-testid="baseButton-secondary"] button:hover {
+            background: #e8edf5 !important;
+            border-color: #b9caf0 !important;
+            color: #111111 !important;
+        }
+
+        /* GLOBAL BUTTON RESET — prevent background-clip inheritance from
+           creating black artifacts on any button element */
+        button {
+            background-clip: border-box !important;
+            -webkit-background-clip: border-box !important;
+        }
+
+        .block-container button[data-testid="baseButton-primary"]:active,
+        .block-container button[data-testid="baseButton-secondary"]:active {
+            transform: translateY(0);
+        }
+
+        /* MOBILE */
         @media (max-width: 900px) {
             .block-container {
                 padding-top: 0.85rem;
@@ -594,41 +978,97 @@ def apply_styles() -> None:
                 flex: 1 1 100% !important;
                 min-width: 0 !important;
             }
-            .hero-sub {
-                font-size: 0.95rem;
-                overflow-wrap: anywhere;
+            .artify-hero-copy {
+                max-width: none;
+                padding-top: 0.25rem;
+                text-align: center;
             }
-            .hero-title {
-                font-size: clamp(1.42rem, 6.2vw, 1.72rem);
-                line-height: 1.14;
-                overflow-wrap: anywhere;
+            .artify-hero-title {
+                font-size: clamp(2.2rem, 11vw, 3.4rem);
             }
-            .feature-card {
+            .artify-hero-desc {
+                max-width: none;
+                margin-top: 1.05rem;
+                font-size: 0.98rem;
+            }
+            .st-key-hero_showcase_shell {
+                padding-bottom: 1.5rem;
+            }
+            .st-key-hero_cta_button {
+                max-width: none;
+                margin-top: 1.4rem;
+            }
+            .st-key-hero_cta_button button {
+                min-height: 3.35rem;
+                font-size: 1rem !important;
+            }
+            .artify-preview-card.is-stylized {
+                margin-top: 1rem;
+            }
+            .how-works-intro {
+                margin-bottom: 1.2rem;
+            }
+            .how-works-title {
+                font-size: clamp(1.9rem, 9vw, 2.6rem);
+            }
+            .how-works-sub {
+                margin-top: 0.65rem;
+                font-size: 0.96rem;
+            }
+            .how-works-card {
                 min-height: auto;
+                padding: 1.3rem 1.05rem 1.15rem 1.05rem;
+                border-radius: 1.3rem;
             }
-            .spotlight-card,
-            .feature-card,
-            .panel-card,
+            .how-works-icon {
+                width: 4.2rem;
+                height: 4.2rem;
+                border-radius: 1.1rem;
+                font-size: 1.7rem;
+                margin-bottom: 1.1rem;
+            }
+            .how-works-card-title {
+                margin-bottom: 0.7rem;
+            }
+            .how-works-card-desc {
+                max-width: none;
+                font-size: 0.9rem;
+                line-height: 1.6;
+            }
             .proof-card {
                 padding: 0.72rem 0.75rem;
             }
             .st-key-auth_shell {
-                padding: 0.75rem;
+                padding: 1rem 0.95rem 1rem 0.95rem;
+                border-radius: 1.45rem;
             }
-            .spotlight-card p,
-            .feature-card p,
+            .auth-title {
+                font-size: clamp(1.8rem, 8vw, 2.1rem);
+            }
+            .auth-subtitle {
+                font-size: 0.93rem;
+            }
+            .auth-social-btn {
+                min-height: 3.05rem;
+                font-size: 0.92rem;
+            }
+            .auth-social-icon {
+                width: 1.45rem;
+                height: 1.45rem;
+                font-size: 0.84rem;
+            }
+            .st-key-auth_shell [data-baseweb="input"] {
+                min-height: 3.05rem;
+            }
+            .st-key-auth_shell [data-testid="stFormSubmitButton"] button {
+                min-height: 3.1rem;
+            }
             .proof-card p {
                 overflow-wrap: anywhere;
                 font-size: 0.88rem;
             }
-            .stat-row {
-                gap: 0.35rem;
-            }
-            .stat-chip {
-                font-size: 0.76rem;
-            }
-            button[data-testid="baseButton-primary"],
-            button[data-testid="baseButton-secondary"] {
+            .block-container button[data-testid="baseButton-primary"],
+            .block-container button[data-testid="baseButton-secondary"] {
                 min-height: 2.65rem;
             }
             [data-testid="stLogo"] img,
@@ -645,12 +1085,6 @@ def apply_styles() -> None:
     )
 
 
-assets_dir = Path(__file__).resolve().parent / "assets"
-icon_png = assets_dir / "artify_logo.png"
-logo_svg = assets_dir / "artify_logo.svg"
-logo_asset = logo_svg if logo_svg.exists() else icon_png
-
-
 @st.cache_data(show_spinner=False)
 def image_data_uri(path: Path):
     if not path.exists():
@@ -665,13 +1099,265 @@ def image_data_uri(path: Path):
     encoded = base64.b64encode(path.read_bytes()).decode("ascii")
     return f"data:{mime};base64,{encoded}"
 
-st.set_page_config(
-    page_title="Artify AI",
-    page_icon=str(icon_png) if icon_png.exists() else ":art:",
-    layout="wide",
-    initial_sidebar_state="collapsed",
-)
 
+def render_auth_forms() -> None:
+
+    if "auth_page" not in st.session_state:
+        st.session_state.auth_page = "login"
+
+    def set_auth_page(page: str):
+        st.session_state.auth_page = page
+        st.rerun()
+
+    def render_auth_intro(title, subtitle, google_text, divider_text):
+        st.markdown(
+            f"""
+            <div class="auth-shell-head">
+                <h2 class="auth-title">{title}</h2>
+                <p class="auth-subtitle">{subtitle}</p>
+            </div>
+            <div class="auth-social-stack">
+                <div class="auth-social-btn">
+                    <span class="auth-social-icon google">G</span>
+                    <span>{google_text}</span>
+                </div>
+            </div>
+            <div class="auth-divider"><span>{divider_text}</span></div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    def render_password_input(label, key, placeholder, visibility_key):
+
+        password_visible = st.session_state.get(visibility_key, False)
+
+        input_col, toggle_col = st.columns([6,1], gap="small")
+
+        with input_col:
+            value = st.text_input(
+                label,
+                type="default" if password_visible else "password",
+                key=key,
+                placeholder=placeholder,
+            )
+
+        with toggle_col:
+            if st.button(
+                " ",
+                key=f"{key}_toggle",
+                icon=":material/visibility:" if password_visible else ":material/visibility_off:",
+                help="Hide password" if password_visible else "Show password",
+                type="tertiary",
+                width="stretch",
+            ):
+                st.session_state[visibility_key] = not password_visible
+                st.rerun()
+
+        return value
+
+    # Fake tabs (same layout visually)
+    tab1, tab2 = st.columns(2)
+
+    with tab1:
+        if st.button("Sign In", use_container_width=True):
+            set_auth_page("login")
+
+    with tab2:
+        if st.button("Register", use_container_width=True):
+            set_auth_page("register")
+
+    # ---------------- LOGIN ---------------- #
+
+    if st.session_state.auth_page == "login":
+
+        render_auth_intro(
+            "Welcome Back",
+            "Sign in to continue to AI Stylizer",
+            "Continue with Google",
+            "Or continue with email",
+        )
+
+        identifier = st.text_input(
+            "Email address",
+            key="login_identifier",
+            placeholder="you@example.com",
+        )
+
+        password = render_password_input(
+            "Password",
+            "login_password",
+            "Enter your password",
+            "show_login_password",
+        )
+
+        remember_col, forgot_col = st.columns([1,1])
+
+        with remember_col:
+            remember_me = st.checkbox(
+                "Remember me",
+                key="login_remember_me",
+            )
+
+        with forgot_col:
+            st.markdown(
+                '<p class="auth-text-link">Forgot password?</p>',
+                unsafe_allow_html=True,
+            )
+
+        login_submit = st.button(
+            "Sign In",
+            key="auth_submit_button_login",
+            width="stretch",
+            type="primary",
+        )
+
+        col1, col2 = st.columns([3,2])
+
+        with col1:
+            st.markdown(
+                '<p class="auth-bottom-note">Don&#39;t have an account?</p>',
+                unsafe_allow_html=True,
+            )
+
+        with col2:
+            if st.button("Sign up for free", key="switch_to_register", type="tertiary"):
+                set_auth_page("register")
+
+        if login_submit:
+
+            result = login_user(identifier.strip(), password)
+
+            if result.get("success"):
+
+                st.session_state.logged_in = True
+                st.session_state.authenticated = True
+                st.session_state.username = result.get("username")
+                st.session_state.email = result.get("email")
+                st.session_state.user_id = result.get("user_id")
+                st.session_state.remember_me = bool(remember_me)
+                st.session_state.auth_modal_open = False
+
+                st.rerun()
+
+            else:
+                st.error(result.get("message", "Login failed."))
+
+    # ---------------- REGISTER ---------------- #
+
+    if st.session_state.auth_page == "register":
+
+        render_auth_intro(
+            "Create Account",
+            "Start transforming your photos with AI",
+            "Sign up with Google",
+            "Or sign up with email",
+        )
+
+        reg_user = st.text_input(
+            "Full name",
+            key="reg_username",
+            placeholder="John Doe",
+        )
+
+        reg_email = st.text_input(
+            "Email address",
+            key="reg_email",
+            placeholder="you@example.com",
+        )
+
+        reg_pass = render_password_input(
+            "Password",
+            "reg_password",
+            "Create a strong password",
+            "show_reg_password",
+        )
+
+        reg_confirm = render_password_input(
+            "Confirm password",
+            "reg_confirm",
+            "Re-enter your password",
+            "show_reg_confirm_password",
+        )
+
+        agree_terms = st.checkbox(
+            "I agree to the Terms of Service and Privacy Policy",
+            key="reg_terms",
+        )
+
+        register_submit = st.button(
+            "Create Account",
+            key="auth_submit_button_register",
+            width="stretch",
+            type="primary",
+        )
+
+        col1, col2 = st.columns([3,2])
+
+        with col1:
+            st.markdown(
+                '<p class="auth-bottom-note">Already have an account?</p>',
+                unsafe_allow_html=True,
+            )
+
+        with col2:
+            if st.button("Sign in", key="switch_to_login", type="tertiary"):
+                set_auth_page("login")
+
+        if register_submit:
+
+            reg_user_clean = reg_user.strip()
+            reg_email_clean = reg_email.strip()
+
+            submit_errors = []
+
+            if not (reg_user_clean and reg_email_clean and reg_pass and reg_confirm):
+                submit_errors.append("All fields are required.")
+
+            if reg_pass != reg_confirm:
+                submit_errors.append("Passwords do not match.")
+
+            if not agree_terms:
+                submit_errors.append("You must agree to the Terms of Service and Privacy Policy.")
+
+            if submit_errors:
+                st.error("Please fix the following:\n- " + "\n- ".join(submit_errors))
+
+            else:
+
+                result = register_user(reg_user_clean, reg_email_clean, reg_pass)
+
+                if result.get("success"):
+
+                    st.session_state.flash_message = "Account created. Please sign in."
+                    set_auth_page("login")
+
+                else:
+                    st.error(result.get("message", "Registration failed."))
+
+
+
+def close_auth_modal() -> None:
+    st.session_state.auth_modal_open = False
+
+
+if hasattr(st, "dialog"):
+
+    @st.dialog("Sign In / Register", on_dismiss=close_auth_modal)
+    def open_auth_modal() -> None:
+        auth_card_container = st.container(key="auth_shell")
+        with auth_card_container:
+            render_auth_forms()
+
+else:
+
+    def open_auth_modal() -> None:
+        auth_card_container = st.container(key="auth_shell")
+        with auth_card_container:
+            render_auth_forms()
+            st.markdown(
+                '<p class="auth-close-note">Close this panel by reloading or navigating.</p>',
+                unsafe_allow_html=True,
+            )
 
 @st.cache_resource
 def initialize_app() -> None:
@@ -680,22 +1366,30 @@ def initialize_app() -> None:
 
 initialize_app()
 apply_styles()
-if logo_asset.exists() and hasattr(st, "logo"):
-    try:
-        st.logo(str(logo_asset), size="large")
-    except TypeError:
-        st.logo(str(logo_asset))
+# After apply_styles() runs the full theme is in place — unlock opacity in
+# case the primer JS fired before .stApp existed (rare but possible on slow tabs).
+st.markdown(
+    "<style>.stApp { opacity: 1 !important; }</style>",
+    unsafe_allow_html=True,
+)
 
 defaults = {
     "logged_in": False,
+    "authenticated": False,
     "username": None,
     "email": None,
     "user_id": None,
     "remember_me": False,
+    "auth_modal_open": False,
+    "auth_tabs": "Sign In",
 }
 for key, value in defaults.items():
     if key not in st.session_state:
         st.session_state[key] = value
+
+auth_state = bool(st.session_state.get("logged_in") or st.session_state.get("authenticated"))
+st.session_state.logged_in = auth_state
+st.session_state.authenticated = auth_state
 
 if "flash_message" in st.session_state:
     st.success(st.session_state.flash_message)
@@ -709,7 +1403,9 @@ with st.sidebar:
     )
     st.markdown("---")
 
-    if st.session_state.logged_in:
+    request_auth_modal = bool(st.session_state.get("auth_modal_open"))
+
+    if st.session_state.authenticated:
         st.success(f"Signed in as {st.session_state.username}")
         if st.session_state.email:
             st.caption(st.session_state.email)
@@ -719,202 +1415,188 @@ with st.sidebar:
 
         if st.button("Log out", width="stretch"):
             st.session_state.logged_in = False
+            st.session_state.authenticated = False
             st.session_state.username = None
             st.session_state.email = None
             st.session_state.user_id = None
             st.session_state.remember_me = False
+            st.session_state.auth_modal_open = False
             st.rerun()
     else:
-        st.info("Log in or register to access your dashboard, save edits, and manage your workspace.")
-        if st.button("Open dashboard", width="stretch"):
-            st.warning("Please sign in from the main account panel first.")
+        if st.button("Sign In / Register", width="stretch", type="primary"):
+            st.session_state.auth_modal_open = True
+            request_auth_modal = True
 
-left, right = st.columns([1.55, 1], gap="large")
+before_uri = image_data_uri(before1_image)
+after_uri = image_data_uri(after1_image)
+original_image_block = (
+    f'<img src="{before_uri}" alt="Original photo" class="artify-preview-image">'
+    if before_uri
+    else '<div class="artify-preview-placeholder"></div>'
+)
+stylized_image_block = (
+    f'<img src="{after_uri}" alt="Stylized photo" class="artify-preview-image is-stylized">'
+    if after_uri
+    else '<div class="artify-preview-placeholder"></div>'
+)
 
-with left:
-    st.markdown('<div class="brand-kicker">AI CARTOONIZATION STUDIO</div>', unsafe_allow_html=True)
-    st.markdown(
-        '<h1 class="hero-title">Turn photos into crisp, studio-style cartoon visuals.</h1>',
-        unsafe_allow_html=True,
-    )
-    st.markdown(
-        '<p class="hero-sub">Upload, stylize, compare, and export in a clean flow built for creators and marketing teams.</p>',
-        unsafe_allow_html=True,
-    )
-    st.markdown(
-        """
-        <div class="stat-row">
-            <span class="stat-chip">One-click styles</span>
-            <span class="stat-chip">HD exports</span>
-            <span class="stat-chip">Private workspace</span>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+hero_showcase_shell = st.container(key="hero_showcase_shell")
+with hero_showcase_shell:
+    hero_copy_col, hero_preview_col = st.columns([1.08, 1], gap="large")
 
-    start_creating = st.button("Start Creating", type="primary", width="stretch")
-    if start_creating:
-        if st.session_state.logged_in:
-            st.switch_page("pages/dashboard.py")
-        else:
-            st.warning("Please sign in from the account panel on the right to continue.")
-
-    st.caption("Built for fast social posts, campaigns, and portfolio-ready outputs.")
-
-with right:
-    if st.session_state.logged_in:
+    with hero_copy_col:
         st.markdown(
             """
-            <div class="panel-card">
-                <p class="panel-title">Welcome back</p>
-                <p class="panel-sub">You are signed in and ready to process new images.</p>
+            <div class="artify-hero-copy">
+                <h1 class="artify-hero-title">
+                    Transform Your<br>
+                    Photos into <span class="artify-hero-gradient">Art</span> in<br>
+                    <span class="artify-hero-accent">Seconds</span>
+                </h1>
+                <p class="artify-hero-desc">
+                    Turn everyday photos into stunning cartoon illustrations with
+                    our AI-powered platform. Built with Python and OpenCV for
+                    professional-quality results.
+                </p>
             </div>
             """,
             unsafe_allow_html=True,
         )
-        st.success(f"Signed in as {st.session_state.username}")
-        if st.session_state.email:
-            st.caption(st.session_state.email)
-        if st.button("Go to Dashboard", width="stretch", type="primary"):
-            st.switch_page("pages/dashboard.py")
-    else:
-        auth_card_container = st.container(key="auth_shell")
-        with auth_card_container:
+
+        hero_cta_button = st.container(key="hero_cta_button")
+        with hero_cta_button:
+            start_creating = st.button(
+                "Get Started Now →",
+                type="primary",
+                width="stretch",
+                key="hero_get_started",
+            )
+            if start_creating:
+                if st.session_state["authenticated"]:
+                    st.switch_page("pages/dashboard.py")
+                else:
+                    st.session_state.auth_modal_open = True
+                    request_auth_modal = True
+
+    with hero_preview_col:
+        preview_original_col, preview_stylized_col = st.columns(2, gap="medium")
+
+        with preview_original_col:
             st.markdown(
-                """
-                <p class="panel-title">Account</p>
+                f"""
+                <div class="artify-preview-card">
+                    <div class="artify-preview-frame original">
+                        {original_image_block}
+                    </div>
+                    <div class="artify-preview-chip">Original</div>
+                </div>
                 """,
                 unsafe_allow_html=True,
             )
-            login_tab, register_tab = st.tabs(["Log in", "Register"])
 
-            with login_tab:
-                with st.form("login_form"):
-                    identifier = st.text_input(
-                        "Email or username",
-                        key="login_identifier",
-                        placeholder="you@example.com or username",
-                    )
-                    password = st.text_input(
-                        "Password",
-                        type="password",
-                        key="login_password",
-                        placeholder="Enter your password",
-                    )
-                    remember_me = st.checkbox(
-                        "Remember me on this device",
-                        key="login_remember_me",
-                    )
-                    login_submit = st.form_submit_button(
-                        "Sign in",
-                        width="stretch",
-                        type="primary",
-                    )
-                    st.caption("Forgot password? Recovery options are coming soon.")
+        with preview_stylized_col:
+            st.markdown(
+                f"""
+                <div class="artify-preview-card is-stylized">
+                    <div class="artify-preview-frame stylized">
+                        {stylized_image_block}
+                    </div>
+                    <div class="artify-preview-chip stylized">Stylized</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
 
-                if login_submit:
-                    result = login_user(identifier.strip(), password)
-                    if result.get("success"):
-                        st.session_state.logged_in = True
-                        st.session_state.username = result.get("username")
-                        st.session_state.email = result.get("email")
-                        st.session_state.user_id = result.get("user_id")
-                        st.session_state.remember_me = bool(remember_me)
-                        st.rerun()
-                    else:
-                        st.error(result.get("message", "Login failed."))
+if request_auth_modal:
+    open_auth_modal()
 
-            with register_tab:
-                with st.form("register_form"):
-                    reg_col1, reg_col2 = st.columns(2, gap="small")
-                    with reg_col1:
-                        reg_user = st.text_input(
-                            "Username",
-                            key="reg_username",
-                            placeholder="e.g. alex.smith",
-                        )
-                    with reg_col2:
-                        reg_email = st.text_input(
-                            "Email",
-                            key="reg_email",
-                            placeholder="you@example.com",
-                        )
-                    reg_pass = st.text_input(
-                        "Password",
-                        type="password",
-                        key="reg_password",
-                        placeholder="Create a strong password",
-                    )
-                    reg_confirm = st.text_input(
-                        "Confirm password",
-                        type="password",
-                        key="reg_confirm",
-                        placeholder="Re-enter your password",
-                    )
-                    st.caption("Use at least 8 characters with uppercase, lowercase, number, and special symbol.")
-                    agree_terms = st.checkbox("I agree to the Terms and Conditions", key="reg_terms")
-                    register_submit = st.form_submit_button("Register", width="stretch", type="primary")
+st.markdown("<div style='height: 2.2rem;'></div>", unsafe_allow_html=True)
 
-                if register_submit:
-                    reg_user_clean = reg_user.strip()
-                    reg_email_clean = reg_email.strip()
-                    submit_errors = []
+st.markdown(
+    """
+    <div class="how-works-intro">
+        <h2 class="how-works-title">How It Works</h2>
+        <p class="how-works-sub">
+            Four simple steps to transform your photos into beautiful artwork
+        </p>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 
-                    if not (reg_user_clean and reg_email_clean and reg_pass and reg_confirm):
-                        submit_errors.append("All fields are required.")
-                    if reg_pass and reg_confirm and reg_pass != reg_confirm:
-                        submit_errors.append("Passwords do not match.")
-                    if not agree_terms:
-                        submit_errors.append("You must agree to the Terms and Conditions.")
-
-                    if submit_errors:
-                        st.error("Please fix the following:\n- " + "\n- ".join(submit_errors))
-                    else:
-                        result = register_user(reg_user_clean, reg_email_clean, reg_pass)
-                        if result.get("success"):
-                            st.session_state.flash_message = "Account created. Please sign in."
-                            st.rerun()
-                        else:
-                            st.error(result.get("message", "Registration failed."))
-
+how_step_1, how_step_2, how_step_3, how_step_4 = st.columns(4, gap="medium")
+with how_step_1:
     st.markdown(
         """
-        <div class="spotlight-card">
-            <h4>Quick flow</h4>
-            <p>1. Upload image<br>2. Apply style preset<br>3. Compare and export final artwork</p>
+        <div class="how-works-card">
+            <div class="how-works-icon upload">&#128228;</div>
+            <h3 class="how-works-card-title">Upload</h3>
+            <p class="how-works-card-desc">
+                Select any photo from your device to begin the transformation process.
+            </p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+with how_step_2:
+    st.markdown(
+        """
+        <div class="how-works-card">
+            <div class="how-works-icon stylize">&#10024;</div>
+            <h3 class="how-works-card-title">Stylize</h3>
+            <p class="how-works-card-desc">
+                AI processes your image using advanced neural networks instantly.
+            </p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+with how_step_3:
+    st.markdown(
+        """
+        <div class="how-works-card">
+            <div class="how-works-icon preview">&#128065;</div>
+            <h3 class="how-works-card-title">Preview</h3>
+            <p class="how-works-card-desc">
+                Compare side-by-side results and adjust settings to perfection.
+            </p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+with how_step_4:
+    st.markdown(
+        """
+        <div class="how-works-card">
+            <div class="how-works-icon save">&#11015;</div>
+            <h3 class="how-works-card-title">Save</h3>
+            <p class="how-works-card-desc">
+                Download your transformed images in high-quality formats.
+            </p>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
-st.markdown('<div class="section-title">Style Preview</div>', unsafe_allow_html=True)
-before_image = assets_dir / "before.jpeg"
-cartoon_image = assets_dir / "cartoon_style.png"
-pencil_color_image = assets_dir / "pencil_color.png"
-sketch_image = assets_dir / "sketch_style.png"
+st.markdown('<div class="section-title">Explore styles</div>', unsafe_allow_html=True)
 
 preview_cards = [
+
     {
-        "title": "Before",
-        "description": "Original photo input ready for style transformation.",
-        "path": before_image,
-        "fallback_class": "proof-before",
-    },
-    {
-        "title": "Cartoon Style",
-        "description": "Soft-shaded look for social content and branding visuals.",
+        "title": "Studio Cartoon",
+        "description": "Soft-shaded, bold outlines designed for modern branding.",
         "path": cartoon_image,
         "fallback_class": "proof-after",
     },
     {
-        "title": "Pencil Colour Style",
-        "description": "Color-rich pencil rendering with clean strokes.",
+        "title": "Colored Pencil",
+        "description": "Rich, textured strokes with natural tonal depth.",
         "path": pencil_color_image,
         "fallback_class": "proof-alt",
     },
     {
-        "title": "Sketch Style",
-        "description": "Graphite-style outlines for classic sketch output.",
+        "title": "Graphite Sketch",
+        "description": "Classic monochrome lines for timeless illustration.",
         "path": sketch_image,
         "fallback_class": "proof-before",
     },
@@ -938,26 +1620,3 @@ for column, card in zip(preview_columns, preview_cards):
             """,
             unsafe_allow_html=True,
         )
-
-st.markdown('<div class="section-title">Highlights</div>', unsafe_allow_html=True)
-f1, f2 = st.columns(2, gap="medium")
-with f1:
-    st.markdown(
-        """
-        <div class="feature-card">
-            <h4>Consistent quality</h4>
-            <p>Stable visual style for portraits, products, and campaigns.</p>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-with f2:
-    st.markdown(
-        """
-        <div class="feature-card">
-            <h4>Faster iterations</h4>
-            <p>Test style directions quickly with less manual editing.</p>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )

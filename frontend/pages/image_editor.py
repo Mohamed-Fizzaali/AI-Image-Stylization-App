@@ -102,16 +102,16 @@ def apply_styles() -> None:
         @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap');
 
         :root {
-            --bg-top: #050d1e;
-            --bg-mid: #09182d;
-            --bg-bottom: #0f1f3a;
-            --ink-900: #eaf2ff;
-            --ink-700: #c0cfe8;
-            --ink-500: #8ea3c3;
-            --brand-800: #0d4f63;
-            --brand-500: #22d3ee;
-            --card-bg: rgba(12, 24, 44, 0.78);
-            --card-stroke: rgba(125, 162, 206, 0.24);
+            --bg-top: #ffffff;
+            --bg-mid: #ffffff;
+            --bg-bottom: #f7f7f8;
+            --ink-900: #111111;
+            --ink-700: #222222;
+            --ink-500: #555555;
+            --brand-800: #111111;
+            --brand-500: #111111;
+            --card-bg: #ffffff;
+            --card-stroke: #e5e7eb;
         }
 
         html, body, [class*="css"] {
@@ -129,21 +129,18 @@ def apply_styles() -> None:
 
         html, body {
             background:
-                radial-gradient(circle at -2% -8%, rgba(34, 211, 238, 0.22), transparent 34%),
-                radial-gradient(circle at 103% 0%, rgba(251, 146, 60, 0.20), transparent 34%),
-                radial-gradient(circle at 70% 105%, rgba(59, 130, 246, 0.18), transparent 40%),
-                linear-gradient(160deg, var(--bg-top) 0%, var(--bg-mid) 46%, var(--bg-bottom) 100%) fixed;
+                #ffffff;
         }
 
         [data-testid="stAppViewContainer"],
         [data-testid="stMain"],
         [data-testid="stHeader"],
         [data-testid="stToolbar"] {
-            background: transparent !important;
+            background: #ffffff !important;
         }
 
         [data-testid="stAppViewContainer"] > .main {
-            background: transparent !important;
+            background: #ffffff !important;
         }
 
         html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stAppViewContainer"] > .main {
@@ -153,18 +150,15 @@ def apply_styles() -> None:
 
         .stApp {
             background:
-                radial-gradient(circle at -2% -8%, rgba(34, 211, 238, 0.22), transparent 34%),
-                radial-gradient(circle at 103% 0%, rgba(251, 146, 60, 0.20), transparent 34%),
-                radial-gradient(circle at 70% 105%, rgba(59, 130, 246, 0.18), transparent 40%),
-                linear-gradient(160deg, var(--bg-top) 0%, var(--bg-mid) 46%, var(--bg-bottom) 100%);
-            background-attachment: fixed;
+                #ffffff;
+            background-attachment: scroll;
         }
 
         [data-testid="stSidebar"] {
-            border-right: 1px solid rgba(125, 162, 206, 0.24);
-            background: linear-gradient(180deg, rgba(5, 13, 31, 0.98) 0%, rgba(12, 28, 52, 0.96) 100%);
+            border-right: 1px solid #e5e7eb;
+            background: #ffffff;
             color: var(--ink-700);
-            backdrop-filter: blur(10px);
+            backdrop-filter: none;
         }
 
         [data-testid="stSidebar"] * {
@@ -181,8 +175,8 @@ def apply_styles() -> None:
         }
 
         button[data-testid="collapsedControl"] {
-            background: rgba(7, 16, 32, 0.85) !important;
-            border: 1px solid rgba(125, 162, 206, 0.4) !important;
+            background: #111111 !important;
+            border: 1px solid #111111 !important;
             border-radius: 0.6rem !important;
             min-width: 2.3rem !important;
             min-height: 2.3rem !important;
@@ -190,8 +184,8 @@ def apply_styles() -> None:
 
         button[data-testid="collapsedControl"] svg,
         [data-testid="stSidebarNav"] svg {
-            fill: var(--ink-900) !important;
-            color: var(--ink-900) !important;
+            fill: #ffffff !important;
+            color: #ffffff !important;
         }
 
         [data-testid="stSidebarNav"] a {
@@ -206,9 +200,9 @@ def apply_styles() -> None:
 
         .page-kicker {
             display: inline-block;
-            background: rgba(14, 116, 144, 0.22);
-            color: #8de9ff;
-            border: 1px solid rgba(34, 211, 238, 0.35);
+            background: #f7f7f8;
+            color: #555555;
+            border: 1px solid #e5e7eb;
             border-radius: 999px;
             padding: 0.34rem 0.84rem;
             font-size: 0.72rem;
@@ -237,11 +231,11 @@ def apply_styles() -> None:
         }
 
         .meta-card {
-            background: var(--card-bg);
-            border: 1px solid var(--card-stroke);
+            background: #ffffff;
+            border: 1px solid #e5e7eb;
             border-radius: 1rem;
             padding: 1rem 1.05rem;
-            box-shadow: 0 10px 22px rgba(15, 23, 42, 0.04);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
         }
 
         .meta-title {
@@ -256,7 +250,7 @@ def apply_styles() -> None:
             justify-content: space-between;
             gap: 1rem;
             padding: 0.52rem 0;
-            border-bottom: 1px solid rgba(125, 162, 206, 0.22);
+            border-bottom: 1px solid #e5e7eb;
             color: var(--ink-700);
             font-size: 0.92rem;
         }
@@ -278,17 +272,17 @@ def apply_styles() -> None:
 
         [data-testid="stFileUploader"] section {
             border-radius: 0.95rem;
-            border: 1px dashed rgba(34, 211, 238, 0.42);
-            background: rgba(8, 20, 38, 0.62);
+            border: 1px dashed #e5e7eb;
+            background: #fafafa;
         }
 
         button[data-testid="baseButton-primary"] {
-            background: linear-gradient(135deg, #0e7490 0%, #22d3ee 100%);
-            border: none;
-            color: #03101f;
+            background: #111111;
+            border: 1px solid #111111;
+            color: #ffffff;
             font-weight: 700;
             border-radius: 0.72rem;
-            box-shadow: 0 10px 22px rgba(34, 211, 238, 0.20);
+            box-shadow: none;
         }
 
         [data-testid="stLogo"] img,
