@@ -1059,27 +1059,21 @@ def render_auth_forms() -> None:
         st.rerun()
 
     def render_auth_intro(title, subtitle, google_text, divider_text):
-        has_creds = has_google_credentials()
-        
-        btn_html = ""
-        if has_creds:
-            google_url, state = get_google_auth_url(REDIRECT_URI)
-            st.session_state.oauth_state = state
-            btn_html = f"""
-                <div class="auth-social-stack">
-                    <a href="{google_url}" target="_self" style="text-decoration: none; display: block;">
-                        <div class="auth-social-btn">
-                            <span class="auth-social-icon google">G</span>
-                            <span>{google_text}</span>
-                        </div>
-                    </a>
-                </div>
-                <div class="auth-divider"><span>{divider_text}</span></div>
-            """
-        else:
-            btn_html = f"""
-                <div class="auth-divider"><span>{divider_text}</span></div>
-            """
+        # Google login is intentionally frozen for now.
+        # Keep the visual button but make it a non-functional placeholder.
+        btn_html = f"""
+            <div class="auth-social-stack">
+                <a href="#"
+                   style="text-decoration: none; display: block;"
+                   onclick="return false;">
+                    <div class="auth-social-btn" title="Google login is coming soon!">
+                        <span class="auth-social-icon google">G</span>
+                        <span>{google_text} (Coming Soon)</span>
+                    </div>
+                </a>
+            </div>
+            <div class="auth-divider"><span>{divider_text}</span></div>
+        """
 
         st.markdown(
             f"""
@@ -1350,36 +1344,40 @@ st.session_state.authenticated = auth_state
 sync_user_profile_state()
 
 # ==========================================
-# GOOGLE OAUTH CALLBACK HANDLING
+# GOOGLE OAUTH CALLBACK HANDLING (DISABLED)
 # ==========================================
-if "code" in st.query_params:
-    auth_code = st.query_params.get("code")
-    st.query_params.clear()  # Clear URL code param
-    
-    with st.spinner("Authenticating with Google..."):
-        oauth_state = st.session_state.get("oauth_state")
-        result = process_google_callback(auth_code, state=oauth_state, redirect_uri=REDIRECT_URI)
-        
-        if result.get("success"):
-            st.session_state.logged_in = True
-            st.session_state.authenticated = True
-            st.session_state.is_logged_in = True
-            st.session_state.username = result.get("username")
-            st.session_state.user_name = result.get("name") or result.get("username")
-            st.session_state.profile_image = result.get("profile_picture")
-            st.session_state.email = result.get("email")
-            st.session_state.user_id = result.get("user_id")
-            set_user_profile_state(
-                user_name=result.get("name") or result.get("username"),
-                profile_image=result.get("profile_picture"),
-                login_method="google",
-            )
-                
-            st.session_state.auth_modal_open = False
-            st.success("Successfully signed in with Google!")
-            st.rerun()
-        else:
-            st.error(result.get("message", "Google login failed."))
+# Google OAuth has been temporarily disabled so the app can run without
+# secrets.toml or .env configuration. The original callback handling is
+# retained below for reference.
+#
+# if "code" in st.query_params:
+#     auth_code = st.query_params.get("code")
+#     st.query_params.clear()  # Clear URL code param
+#     
+#     with st.spinner("Authenticating with Google..."):
+#         oauth_state = st.session_state.get("oauth_state")
+#         result = process_google_callback(auth_code, state=oauth_state, redirect_uri=REDIRECT_URI)
+#         
+#         if result.get("success"):
+#             st.session_state.logged_in = True
+#             st.session_state.authenticated = True
+#             st.session_state.is_logged_in = True
+#             st.session_state.username = result.get("username")
+#             st.session_state.user_name = result.get("name") or result.get("username")
+#             st.session_state.profile_image = result.get("profile_picture")
+#             st.session_state.email = result.get("email")
+#             st.session_state.user_id = result.get("user_id")
+#             set_user_profile_state(
+#                 user_name=result.get("name") or result.get("username"),
+#                 profile_image=result.get("profile_picture"),
+#                 login_method="google",
+#             )
+#                 
+#             st.session_state.auth_modal_open = False
+#             st.success("Successfully signed in with Google!")
+#             st.rerun()
+#         else:
+#             st.error(result.get("message", "Google login failed."))
 
 if "flash_message" in st.session_state:
     st.success(st.session_state.flash_message)
@@ -1387,10 +1385,7 @@ if "flash_message" in st.session_state:
 
 with st.sidebar:
     request_auth_modal = bool(st.session_state.get("auth_modal_open"))
-    
-    if not has_google_credentials():
-        st.error("OAuth Credentials missing. See README.md for setup.")
-        
+
     render_sidebar_profile()
 
     if st.session_state.authenticated:

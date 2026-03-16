@@ -20,94 +20,77 @@ USERINFO_URL = "https://www.googleapis.com/oauth2/v3/userinfo"
 
 def load_google_credentials() -> dict | None:
     """
-    Loads Google OAuth credentials using one of three strategies (in strict priority order):
-      1. st.secrets (Streamlit's native way for cloud deployment)
-      2. Environment variables: GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET (.env file via load_dotenv)
-      3. backend/auth/google_credentials.json (local fallback downloaded from Google Cloud Console)
-
-    Neither the JSON file nor the .env file should ever be committed to the repository.
-    See .env.example for a template.
+    Temporarily disabled: Google OAuth credentials loading is frozen so the
+    app can run without any secrets or .env configuration.
     """
+    # NOTE: Original implementation kept for reference, but commented out to
+    # avoid touching st.secrets, dotenv, or local JSON files.
+    #
     # ── Strategy 1: Streamlit secrets ─────────────────────────────────────────
-    try:
-        # Using .get() prevents KeyError if secrets exist but the specific key doesn't
-        # Accessing st.secrets at all can throw StreamlitAPIException/FileNotFoundError
-        # if the .streamlit/secrets.toml file doesn't exist.
-        google_id = st.secrets.get("GOOGLE_CLIENT_ID")
-        google_secret = st.secrets.get("GOOGLE_CLIENT_SECRET")
-        if google_id and google_secret:
-            return {
-                "client_id": google_id,
-                "client_secret": google_secret,
-                "auth_uri": AUTHORIZE_URL,
-                "token_uri": TOKEN_URL,
-            }
-    except Exception:
-        pass
-
+    # try:
+    #     google_id = st.secrets.get("GOOGLE_CLIENT_ID")
+    #     google_secret = st.secrets.get("GOOGLE_CLIENT_SECRET")
+    #     if google_id and google_secret and google_id != "your_google_client_id_here":
+    #         return {
+    #             "client_id": google_id,
+    #             "client_secret": google_secret,
+    #             "auth_uri": AUTHORIZE_URL,
+    #             "token_uri": TOKEN_URL,
+    #         }
+    # except Exception:
+    #     pass
+    #
     # ── Strategy 2: Environment variables (.env or system env) ────────────────
-    from dotenv import load_dotenv
-    load_dotenv()
-
-    client_id = os.getenv("GOOGLE_CLIENT_ID")
-    client_secret = os.getenv("GOOGLE_CLIENT_SECRET")
-
-    if client_id and client_secret:
-        return {
-            "client_id": client_id,
-            "client_secret": client_secret,
-            "auth_uri": AUTHORIZE_URL,
-            "token_uri": TOKEN_URL,
-        }
-
+    # from dotenv import load_dotenv
+    # load_dotenv()
+    #
+    # client_id = os.getenv("GOOGLE_CLIENT_ID")
+    # client_secret = os.getenv("GOOGLE_CLIENT_SECRET")
+    #
+    # if client_id and client_secret and client_id != "your_google_client_id_here":
+    #     return {
+    #         "client_id": client_id,
+    #         "client_secret": client_secret,
+    #         "auth_uri": AUTHORIZE_URL,
+    #         "token_uri": TOKEN_URL,
+    #     }
+    #
     # ── Strategy 3: JSON file (local fallback) ────────────────────────────────
-    # Search in common locations: backend/auth/ and root auth/
-    possible_paths = [
-        Path(__file__).resolve().parent / "auth" / "google_credentials.json",
-        Path(__file__).resolve().parent.parent / "auth" / "google_credentials.json",
-        Path.cwd() / "auth" / "google_credentials.json",
-        Path.cwd() / "backend" / "auth" / "google_credentials.json"
-    ]
-
-    for creds_path in possible_paths:
-        if creds_path.exists():
-            with open(creds_path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-
-            # Google's downloaded JSON nests values under "web" or "installed"
-            creds = data.get("web") or data.get("installed")
-            if creds and creds.get("client_id") and creds.get("client_secret"):
-                return creds
-
+    # possible_paths = [...]
+    #
+    # ...
+    #
     # ── No credentials found ──────────────────────────────────────────────────
     return None
 
 def has_google_credentials() -> bool:
-    """Returns True if Google OAuth credentials are available."""
-    return load_google_credentials() is not None
+    """Google OAuth is currently disabled in this build."""
+    return False
 
 
 def get_google_auth_url(redirect_uri: str) -> tuple[str, str]:
     """
-    Generates the Google OAuth 2.0 authorization URL and state.
+    Temporarily disabled: returns an empty URL/state so no OAuth redirect
+    occurs while Google login is frozen.
     """
-    creds = load_google_credentials()
-    if not creds:
-        return "", ""
-    
-    # Create an OAuth2 session using authlib
-    session = OAuth2Session(
-        client_id=creds.get("client_id"),
-        client_secret=creds.get("client_secret"),
-        scope="openid email profile",
-        redirect_uri=redirect_uri
-    )
-    
-    # Use standard URIs from the file if they exist, fallback to hardcoded
-    auth_uri = creds.get("auth_uri", AUTHORIZE_URL)
-    
-    uri, state = session.create_authorization_url(auth_uri)
-    return uri, state
+    # Original implementation kept for reference but commented out to avoid
+    # constructing OAuth sessions or touching credentials.
+    #
+    # creds = load_google_credentials()
+    # if not creds:
+    #     return "", ""
+    #
+    # session = OAuth2Session(
+    #     client_id=creds.get("client_id"),
+    #     client_secret=creds.get("client_secret"),
+    #     scope="openid email profile",
+    #     redirect_uri=redirect_uri,
+    # )
+    #
+    # auth_uri = creds.get("auth_uri", AUTHORIZE_URL)
+    # uri, state = session.create_authorization_url(auth_uri)
+    # return uri, state
+    return "", ""
 
 
 def process_google_callback(auth_code: str, state: str, redirect_uri: str) -> dict:

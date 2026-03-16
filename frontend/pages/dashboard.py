@@ -1,5 +1,7 @@
 import base64
 import sys
+import hashlib
+import time
 from pathlib import Path
 from datetime import datetime
 from typing import cast
@@ -13,6 +15,15 @@ if str(ROOT_DIR) not in sys.path:
 
 from database.db import get_connection
 from frontend.user_profile import sync_user_profile_state, render_sidebar_profile
+from backend.image_upload import get_image_metadata, save_uploaded_image, validate_image
+from backend.image_processing import (
+    bgr_to_rgb,
+    classic_cartoon,
+    encode_image_to_png,
+    pencil_color_effect,
+    read_image,
+    sketch_effect,
+)
 
 
 # ─────────────────────────────────────────────
@@ -440,11 +451,247 @@ def apply_styles() -> None:
         /* Streamlit metric — hide (we use custom HTML) */
         [data-testid="stMetric"] { display: none !important; }
 
+        /* ─────────────────────────────────────
+           AI IMAGE STUDIO (Editor) LAYOUT
+           ───────────────────────────────────── */
+
+        .studio-shell {
+            margin-top: 0.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1.4rem;
+        }
+
+        .studio-layout {
+            display: grid;
+            grid-template-columns: minmax(0, 1.5fr) minmax(0, 1.1fr);
+            gap: 1.3rem;
+            align-items: flex-start;
+        }
+
+        .studio-left,
+        .studio-right {
+            display: flex;
+            flex-direction: column;
+            gap: 0.9rem;
+        }
+
+        /* Upload / preview panel */
+        .studio-panel {
+            background: #ffffff;
+            border-radius: 1.3rem;
+            padding: 1.1rem 1.15rem 1.15rem 1.15rem;
+            border: 1px solid #e5e7eb;
+            box-shadow: 0 22px 60px rgba(15, 23, 42, 0.08);
+        }
+
+        .studio-panel-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 0.75rem;
+        }
+
+        .studio-panel-title {
+            font-size: 0.95rem;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: #9ca3af;
+        }
+
+        .studio-panel-kicker {
+            font-size: 0.78rem;
+            font-weight: 600;
+            color: #4b5563;
+        }
+
         /* File uploader */
         [data-testid="stFileUploader"] section {
-            border-radius: 0.9rem;
-            border: 1.5px dashed var(--border);
+            border-radius: 1.05rem;
+            border: 1.5px dashed #d4d4d8;
             background: #fafbfd;
+            box-shadow: 0 20px 40px rgba(148, 163, 184, 0.16);
+        }
+
+        /* Before / After wrapper */
+        .studio-before-after {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 0.9rem;
+            margin-top: 0.9rem;
+        }
+
+        .studio-preview-card {
+            background: #f9fafb;
+            border-radius: 1.1rem;
+            padding: 0.6rem;
+            border: 1px solid #e5e7eb;
+            box-shadow: 0 16px 40px rgba(148, 163, 184, 0.2);
+            transition: transform 0.18s ease, box-shadow 0.18s ease;
+        }
+
+        .studio-preview-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 20px 48px rgba(15, 23, 42, 0.22);
+        }
+
+        .studio-preview-label {
+            font-size: 0.78rem;
+            font-weight: 600;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            color: #9ca3af;
+            margin-bottom: 0.45rem;
+        }
+
+        .studio-preview-image {
+            width: 100%;
+            border-radius: 0.9rem;
+            overflow: hidden;
+        }
+
+        /* Meta card (right of preview) */
+        .meta-card {
+            border-radius: 1.1rem;
+            border: 1px solid #e5e7eb;
+            background: radial-gradient(circle at top left, #eef2ff 0, #ffffff 45%);
+            padding: 0.95rem 1rem;
+            box-shadow: 0 18px 48px rgba(129, 140, 248, 0.18);
+        }
+        .meta-title {
+            font-size: 0.9rem;
+            font-weight: 700;
+            color: #111827;
+            margin-bottom: 0.6rem;
+        }
+        .meta-item {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.82rem;
+            padding: 0.18rem 0;
+            color: #4b5563;
+        }
+        .meta-key   { font-weight: 600; }
+        .meta-value { font-weight: 500; }
+
+        /* Style cards — soft shadow grid */
+        .style-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 0.75rem;
+        }
+
+        .style-card {
+            position: relative;
+            padding: 0.9rem 0.95rem;
+            border-radius: 1.1rem;
+            background: radial-gradient(circle at 0% 0%, #eef2ff 0, #ffffff 40%);
+            border: 1px solid rgba(226, 232, 240, 0.9);
+            box-shadow: 0 22px 60px rgba(15, 23, 42, 0.12);
+            cursor: pointer;
+            transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+            display: flex;
+            flex-direction: column;
+            gap: 0.4rem;
+        }
+
+        .style-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 26px 70px rgba(15, 23, 42, 0.18);
+            border-color: #c7d2fe;
+        }
+
+        .style-card.is-selected {
+            border-color: #4f46e5;
+            box-shadow: 0 26px 80px rgba(79, 70, 229, 0.4);
+        }
+
+        .style-name {
+            font-size: 0.98rem;
+            font-weight: 700;
+            color: #111827;
+        }
+
+        .style-description {
+            font-size: 0.8rem;
+            color: #6b7280;
+            line-height: 1.5;
+        }
+
+        .style-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 0.2rem;
+        }
+
+        .style-tagline {
+            font-size: 0.78rem;
+            color: #4b5563;
+            font-weight: 600;
+        }
+
+        .style-badge {
+            font-size: 0.72rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            padding: 0.13rem 0.5rem;
+            border-radius: 999px;
+            background: linear-gradient(135deg, #f97316, #ec4899);
+            color: #ffffff;
+            box-shadow: 0 10px 26px rgba(236, 72, 153, 0.45);
+        }
+
+        .style-thumb {
+            margin-top: 0.35rem;
+            font-size: 0.74rem;
+            font-weight: 600;
+            color: #9ca3af;
+        }
+
+        /* Studio controls */
+        .studio-controls {
+            margin-top: 0.9rem;
+            padding: 0.85rem 0.4rem 0 0.4rem;
+            border-top: 1px dashed #e5e7eb;
+        }
+
+        /* Metrics row beneath workspace */
+        .metric-row-studio {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 0.9rem;
+        }
+
+        .metric-card-studio {
+            background: #ffffff;
+            border-radius: 1.1rem;
+            padding: 0.8rem 0.95rem 0.85rem 0.95rem;
+            border: 1px solid #e5e7eb;
+            box-shadow: 0 18px 44px rgba(15, 23, 42, 0.08);
+        }
+
+        .metric-label {
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+            color: #9ca3af;
+            margin-bottom: 0.35rem;
+        }
+
+        .metric-value {
+            font-size: 1.15rem;
+            font-weight: 800;
+            color: #111827;
+            letter-spacing: -0.03em;
+        }
+
+        .metric-caption {
+            font-size: 0.78rem;
+            color: #6b7280;
+            margin-top: 0.12rem;
         }
 
         @keyframes fadeInUp {
@@ -456,6 +703,9 @@ def apply_styles() -> None:
         @media(max-width: 900px) {
             .stat-row  { grid-template-columns: 1fr; }
             .rc-grid   { grid-template-columns: repeat(2, 1fr); }
+            .studio-layout { grid-template-columns: 1fr; }
+            .style-grid { grid-template-columns: 1fr; }
+            .metric-row-studio { grid-template-columns: 1fr; }
             .rc-title  { font-size: 1.3rem; }
         }
         @media(max-width: 540px) {
@@ -495,6 +745,16 @@ user_id  = st.session_state.get("user_id")
 metrics, transactions, profile = fetch_dashboard_data(user_id)
 recent_creations = fetch_recent_creations(user_id, limit=8)
 
+# Initialize editor-related session state so it persists across sections
+st.session_state.setdefault("current_image_path", None)
+st.session_state.setdefault("current_image_hash", None)
+st.session_state.setdefault("processed_image", None)
+st.session_state.setdefault("processed_style", None)
+st.session_state.setdefault("processing_time", None)
+st.session_state.setdefault("current_style", None)
+st.session_state.setdefault("selected_style", "classic_cartoon")
+st.session_state.setdefault("output_quality", None)
+
 # Determine active section from session BEFORE sidebar render
 section = st.session_state.get("dash_section", "dashboard")
 
@@ -503,39 +763,141 @@ section = st.session_state.get("dash_section", "dashboard")
 # ─────────────────────────────────────────────
 
 with st.sidebar:
+    st.markdown(
+        """
+        <style>
+        /* Sidebar-only navigation styling (scoped) */
+        [data-testid="stSidebar"] {
+            background: #ffffff !important;
+        }
+
+        /* Make sidebar content a flex column so footer can stick bottom */
+        [data-testid="stSidebar"] [data-testid="stSidebarContent"] {
+            display: flex !important;
+            flex-direction: column !important;
+            min-height: 100vh !important;
+        }
+
+        /* Navigation buttons base */
+        [data-testid="stSidebar"] .stButton > button {
+            border-radius: 0.95rem !important;
+            border: 1px solid #e6edf7 !important;
+            background: #ffffff !important;
+            box-shadow: 0 10px 22px rgba(148, 163, 184, 0.16) !important;
+            color: #24324a !important;
+            font-weight: 750 !important;
+            text-align: left !important;
+            justify-content: flex-start !important;
+            gap: 0.65rem !important;
+            padding: 0.72rem 0.85rem !important;
+            min-height: 3.1rem !important;
+            transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease !important;
+        }
+
+        [data-testid="stSidebar"] .stButton > button:hover {
+            transform: translateY(-1px) !important;
+            border-color: #cfe0ff !important;
+            box-shadow: 0 14px 26px rgba(148, 163, 184, 0.20) !important;
+        }
+
+        /* Active state (Streamlit primary buttons) */
+        [data-testid="stSidebar"] .stButton > button[kind="primary"] {
+            border: none !important;
+            background: linear-gradient(135deg, #4d7ff5 0%, #18b5df 100%) !important;
+            color: #ffffff !important;
+            box-shadow: 0 16px 34px rgba(77, 127, 245, 0.28) !important;
+        }
+
+        [data-testid="stSidebar"] .stButton > button[kind="primary"] * {
+            color: #ffffff !important;
+        }
+
+        /* Ensure button label text aligns left */
+        [data-testid="stSidebar"] .stButton > button div,
+        [data-testid="stSidebar"] .stButton > button p,
+        [data-testid="stSidebar"] .stButton > button span {
+            text-align: left !important;
+        }
+
+        /* Footer */
+        [data-testid="stSidebar"] .st-key-sb_footer {
+            margin-top: auto !important;
+            padding-top: 0.75rem !important;
+            padding-bottom: 0.75rem !important;
+        }
+
+        [data-testid="stSidebar"] hr.sb-hr {
+            border: none !important;
+            border-top: 1px solid #e6edf7 !important;
+            margin: 0.75rem 0 0.9rem 0 !important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
     render_sidebar_profile()
 
-    # Navigation — aligned to Figma
-    if st.button("📊  Dashboard", use_container_width=True, type="primary" if section == "dashboard" else "secondary"):
-        st.session_state["dash_section"] = "dashboard"
-        st.rerun()
+    # Navigation — SPA style, sections within dashboard
+    nav = st.container(key="sb_nav")
+    with nav:
+        if st.button(
+            "📊  Dashboard",
+            use_container_width=True,
+            type="primary" if section == "dashboard" else "secondary",
+            key="sb_nav_dashboard",
+        ):
+            st.session_state["dash_section"] = "dashboard"
+            st.rerun()
 
-    if st.button("🪄  Image Editor", use_container_width=True, type="secondary"):
-        st.switch_page("pages/image_editor.py")
-        st.stop()
+        if st.button(
+            "🪄  Image Editor",
+            use_container_width=True,
+            type="primary" if section == "editor" else "secondary",
+            key="sb_nav_editor",
+        ):
+            st.session_state["dash_section"] = "editor"
+            st.rerun()
 
-    if st.button("🕒  My Images", use_container_width=True, type="primary" if section == "my_images" else "secondary"):
-        st.session_state["dash_section"] = "my_images"
-        st.rerun()
+        if st.button(
+            "🕒  My Images",
+            use_container_width=True,
+            type="primary" if section == "my_images" else "secondary",
+            key="sb_nav_my_images",
+        ):
+            st.session_state["dash_section"] = "my_images"
+            st.rerun()
 
-    if st.button("💳  Payments", use_container_width=True, type="primary" if section == "payments" else "secondary"):
-        st.session_state["dash_section"] = "payments"
-        st.rerun()
+        if st.button(
+            "💳  Payments",
+            use_container_width=True,
+            type="primary" if section == "payments" else "secondary",
+            key="sb_nav_payments",
+        ):
+            st.session_state["dash_section"] = "payments"
+            st.rerun()
 
-    if st.button("👤  Profile", use_container_width=True, type="primary" if section == "profile" else "secondary"):
-        st.session_state["dash_section"] = "profile"
-        st.rerun()
+        if st.button(
+            "👤  Profile",
+            use_container_width=True,
+            type="primary" if section == "profile" else "secondary",
+            key="sb_nav_profile",
+        ):
+            st.session_state["dash_section"] = "profile"
+            st.rerun()
 
-    st.markdown('<div class="sb-divider"></div>', unsafe_allow_html=True)
+    footer = st.container(key="sb_footer")
+    with footer:
+        st.markdown('<hr class="sb-hr" />', unsafe_allow_html=True)
 
-    # Logout remains neutral and separated at the bottom
-    if st.button("🚪  Log out", use_container_width=True, type="secondary"):
-        st.session_state.clear()
-        st.switch_page("app.py")
-        st.stop()
+        # Logout remains neutral and separated at the bottom
+        if st.button("🚪  Log out", use_container_width=True, type="secondary", key="sb_logout"):
+            st.session_state.clear()
+            st.switch_page("app.py")
+            st.stop()
 
 # ─────────────────────────────────────────────
-# MAIN — always show overview (header + stats + creations)
+# MAIN — section-based view switching (Dashboard, Editor, My Images, Payments, Profile)
 # ─────────────────────────────────────────────
 
 if section == "dashboard":
@@ -650,18 +1012,358 @@ if section == "dashboard":
                 <span class="rc-empty-icon">✨</span>
                 <p class="rc-empty-title">No creations yet</p>
                 <p class="rc-empty-text">
-                    Start by creating your first cartoon in the Image Studio.
+                    Start by creating your first cartoon in the Image Editor tab.
                 </p>
             </div>
             """,
             unsafe_allow_html=True,
         )
         st.markdown("<div style='height:.5rem'></div>", unsafe_allow_html=True)
-        _, col_btn, _ = st.columns([1, 1.4, 1])
-        with col_btn:
-            if st.button("🎨  Go to Image Editor", type="primary", use_container_width=True):
-                st.switch_page("pages/image_editor.py")
-                st.stop()
+
+# ─────────────────────────────────────────────
+# IMAGE EDITOR PANEL (in-dashboard workspace)
+# ─────────────────────────────────────────────
+
+elif section == "editor":
+    st.markdown('<h1 class="dash-title">AI Image Studio</h1>', unsafe_allow_html=True)
+    st.markdown(
+        '<p class="dash-sub">Upload once, explore multiple AI styles, and compare results side‑by‑side.</p>',
+        unsafe_allow_html=True,
+    )
+
+    # Backend-driven style dictionary (labels & descriptions injected via f-strings)
+    STYLE_CONFIG = {
+        "classic_cartoon": {
+            "label": "Classic Cartoon",
+            "description": "Bold outlines and smooth shading for a studio cartoon look.",
+            "tagline": "Great for avatars & branding",
+            "popular": True,
+            "preview_asset": "cartoon_style.png",
+        },
+        "sketch": {
+            "label": "Sketch",
+            "description": "High-contrast pencil sketch lines with expressive depth.",
+            "tagline": "Perfect for concept art",
+            "popular": False,
+            "preview_asset": "sketch_style.png",
+        },
+        "pencil_color": {
+            "label": "Pencil Color",
+            "description": "Layered colored-pencil texture with soft gradients.",
+            "tagline": "Ideal for posters & print",
+            "popular": False,
+            "preview_asset": "pencil_color.png",
+        },
+    }
+
+    selected_style_key = cast(str, st.session_state.get("selected_style", "classic_cartoon"))
+
+    studio = st.container()
+    with studio:
+        st.markdown('<div class="studio-shell">', unsafe_allow_html=True)
+
+        # ── Top layout: left (upload/preview) / right (style selection) ──
+        left_col, right_col = st.columns([1.45, 1], gap="large")
+
+        # LEFT: uploader + preview / before-after
+        with left_col:
+            st.markdown(
+                """
+                <div class="studio-panel">
+                    <div class="studio-panel-header">
+                        <div>
+                            <div class="studio-panel-title">Upload & Preview</div>
+                            <div class="studio-panel-kicker">Drop an image to start</div>
+                        </div>
+                    </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+            uploaded_file = st.file_uploader(
+                "Upload image",
+                type=["jpg", "jpeg", "png", "bmp"],
+                help="Supported formats: JPG, JPEG, PNG, BMP. Max size: 10 MB.",
+            )
+
+            if uploaded_file is not None:
+                try:
+                    is_valid, validation_message = validate_image(uploaded_file, max_size_mb=10)
+                except Exception as exc:
+                    st.error(f"Could not validate file: {exc}")
+                    is_valid = False
+                    validation_message = ""
+
+                if not is_valid:
+                    if validation_message:
+                        st.error(validation_message)
+                else:
+                    file_hash = hashlib.sha256(uploaded_file.getvalue()).hexdigest()
+                    current_hash = st.session_state.get("current_image_hash")
+                    current_path = st.session_state.get("current_image_path")
+
+                    if (not current_path) or (file_hash != current_hash):
+                        try:
+                            saved_path = save_uploaded_image(uploaded_file)
+                        except Exception as exc:
+                            st.error(f"Failed to save image: {exc}")
+                        else:
+                            st.session_state.current_image_path = saved_path
+                            st.session_state.current_image_hash = file_hash
+                            st.session_state.processed_image = None
+                            st.session_state.processed_style = None
+                            st.session_state.processing_time = None
+                            st.session_state.current_style = None
+                            st.session_state.output_quality = None
+
+            current_image_path = st.session_state.get("current_image_path")
+            processed_image = st.session_state.get("processed_image")
+            processed_style = st.session_state.get("processed_style")
+            processing_time = st.session_state.get("processing_time")
+
+            if current_image_path:
+                image_path_obj = Path(current_image_path)
+                if not image_path_obj.exists():
+                    st.warning("Saved image path no longer exists. Please upload again.")
+                    st.session_state.current_image_path = None
+                    st.session_state.current_image_hash = None
+                    st.session_state.processed_image = None
+                    st.session_state.processed_style = None
+                    st.session_state.processing_time = None
+                    st.session_state.output_quality = None
+                else:
+                    try:
+                        metadata = get_image_metadata(current_image_path)
+                    except Exception as exc:
+                        st.error(f"Could not read image metadata: {exc}")
+                        metadata = None
+
+                    # Before / After layout inside left panel
+                    try:
+                        original_bgr = read_image(current_image_path)
+                    except Exception as exc:
+                        st.error(f"Could not read original image for display: {exc}")
+                        original_display = None
+                        processed_display = None
+                    else:
+                        original_display = bgr_to_rgb(original_bgr)
+                        if processed_image is not None:
+                            if processed_image.ndim == 2:
+                                processed_display = processed_image
+                            else:
+                                processed_display = bgr_to_rgb(processed_image)
+                        else:
+                            processed_display = None
+
+                    st.markdown(
+                        '<div class="studio-before-after">',
+                        unsafe_allow_html=True,
+                    )
+                    col_orig, col_proc = st.columns(2, gap="small")
+
+                    with col_orig:
+                        st.markdown(
+                            '<div class="studio-preview-card"><div class="studio-preview-label">Original</div>',
+                            unsafe_allow_html=True,
+                        )
+                        if original_display is not None:
+                            st.image(original_display, use_column_width=True)
+                        else:
+                            st.image(current_image_path, use_column_width=True)
+                        st.caption(str(image_path_obj))
+                        st.markdown("</div>", unsafe_allow_html=True)
+
+                    with col_proc:
+                        label = f"{processed_style} Result" if processed_style else "Result"
+                        st.markdown(
+                            f'<div class="studio-preview-card"><div class="studio-preview-label">{label}</div>',
+                            unsafe_allow_html=True,
+                        )
+                        if processed_display is not None:
+                            st.image(processed_display, use_column_width=True)
+                        else:
+                            st.caption("Run a style on the left to see the result here.")
+                        if processing_time is not None:
+                            st.caption(f"Processing time: {processing_time:.2f} seconds")
+                        st.markdown("</div>", unsafe_allow_html=True)
+
+                    st.markdown("</div>", unsafe_allow_html=True)  # end studio-before-after
+
+                    # Metadata card stays on left but visually acts like a right column in panel
+                    if metadata:
+                        st.markdown(
+                            f"""
+                            <div class="meta-card" style="margin-top:0.9rem;">
+                                <div class="meta-title">Image Metadata</div>
+                                <div class="meta-item"><span class="meta-key">Width</span><span class="meta-value">{metadata['width']} px</span></div>
+                                <div class="meta-item"><span class="meta-key">Height</span><span class="meta-value">{metadata['height']} px</span></div>
+                                <div class="meta-item"><span class="meta-key">Size</span><span class="meta-value">{metadata['file_size_mb']:.4f} MB</span></div>
+                                <div class="meta-item"><span class="meta-key">Format</span><span class="meta-value">{metadata['format']}</span></div>
+                            </div>
+                            """,
+                            unsafe_allow_html=True,
+                        )
+
+                    if st.button("Replace Image", type="primary", use_container_width=True):
+                        st.session_state.current_image_path = None
+                        st.session_state.current_image_hash = None
+                        st.session_state.processed_image = None
+                        st.session_state.processed_style = None
+                        st.session_state.processing_time = None
+                        st.session_state.current_style = None
+                        st.session_state.output_quality = None
+                        st.rerun()
+
+            st.markdown("</div>", unsafe_allow_html=True)  # end studio-panel
+
+        # RIGHT: style selection cards + controls
+        with right_col:
+            st.markdown(
+                """
+                <div class="studio-panel">
+                    <div class="studio-panel-header">
+                        <div>
+                            <div class="studio-panel-title">Styles</div>
+                            <div class="studio-panel-kicker">Tap a card to select</div>
+                        </div>
+                    </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+            st.markdown('<div class="style-grid">', unsafe_allow_html=True)
+
+            # Render each style card as a soft-shadow button, updating st.session_state.selected_style
+            for style_key, cfg in STYLE_CONFIG.items():
+                is_selected = style_key == selected_style_key
+                card_classes = "style-card is-selected" if is_selected else "style-card"
+                label = cfg["label"]
+                description = cfg["description"]
+                tagline = cfg["tagline"]
+                badge_html = (
+                    '<span class="style-badge">Popular</span>' if cfg.get("popular") else ""
+                )
+                thumb = cfg["preview_asset"]
+
+                card_html = f"""
+                <div class="{card_classes}">
+                    <div class="style-name">{label}</div>
+                    <div class="style-description">{description}</div>
+                    <div class="style-meta">
+                        <span class="style-tagline">{tagline}</span>
+                        {badge_html}
+                    </div>
+                    <div class="style-thumb">{thumb}</div>
+                </div>
+                """
+
+                if st.button(
+                    "",
+                    key=f"style_card_btn_{style_key}",
+                    use_container_width=True,
+                ):
+                    st.session_state.selected_style = style_key
+                    st.session_state.current_style = STYLE_CONFIG[style_key]["label"]
+                    st.rerun()
+
+                st.markdown(card_html, unsafe_allow_html=True)
+
+            st.markdown("</div>", unsafe_allow_html=True)  # end style-grid
+
+            # Controls / sliders for selected style
+            cartoon_k = None
+            cartoon_thickness = None
+            with st.container():
+                st.markdown('<div class="studio-controls">', unsafe_allow_html=True)
+                if selected_style_key == "classic_cartoon":
+                    cartoon_k = st.slider("Number of Colors", 4, 16, 8)
+                    cartoon_thickness = st.slider("Edge Thickness", 1, 5, 2)
+                st.markdown("</div>", unsafe_allow_html=True)
+
+            process_clicked = st.button("Run Selected Style", type="primary", use_container_width=True)
+
+            # Trigger OpenCV / AI processing without modifying underlying functions
+            if process_clicked:
+                current_image_path = st.session_state.get("current_image_path")
+                if not current_image_path:
+                    st.warning("Upload an image on the left before processing.")
+                else:
+                    with st.spinner("Processing image..."):
+                        start_time = time.perf_counter()
+                        try:
+                            if selected_style_key == "classic_cartoon":
+                                processed = classic_cartoon(
+                                    current_image_path,
+                                    k=cartoon_k or 8,
+                                    edge_thickness=cartoon_thickness or 2,
+                                )
+                                style_label = STYLE_CONFIG["classic_cartoon"]["label"]
+                            elif selected_style_key == "sketch":
+                                processed = sketch_effect(current_image_path)
+                                style_label = STYLE_CONFIG["sketch"]["label"]
+                            else:
+                                processed = pencil_color_effect(current_image_path)
+                                style_label = STYLE_CONFIG["pencil_color"]["label"]
+                        except Exception as exc:
+                            st.error(f"Failed to process image: {exc}")
+                            st.session_state.processed_image = None
+                            st.session_state.processed_style = None
+                            st.session_state.processing_time = None
+                            st.session_state.output_quality = None
+                        else:
+                            elapsed = time.perf_counter() - start_time
+                            st.session_state.processed_image = processed
+                            st.session_state.processed_style = style_label
+                            st.session_state.processing_time = elapsed
+                            st.session_state.current_style = style_label
+
+                            # Compute simple output-quality metric (resolution + encoded size)
+                            try:
+                                download_bytes = encode_image_to_png(processed)
+                                size_kb = len(download_bytes) / 1024.0
+                                height, width = processed.shape[:2]
+                                st.session_state.output_quality = (
+                                    f"{width}×{height} px · {size_kb:.1f} KB"
+                                )
+                            except Exception:
+                                st.session_state.output_quality = None
+
+            st.markdown("</div>", unsafe_allow_html=True)  # end studio-panel
+
+        st.markdown("</div>", unsafe_allow_html=True)  # end studio-shell
+
+        # ── Bottom metrics row: Processing Time, Output Quality, Style Options ──
+        processing_time_val = st.session_state.get("processing_time")
+        output_quality_val = st.session_state.get("output_quality")
+        selected_style_label = st.session_state.get("current_style") or STYLE_CONFIG[selected_style_key]["label"]
+        styles_count = len(STYLE_CONFIG)
+
+        processing_text = f"{processing_time_val:.2f} s" if processing_time_val is not None else "—"
+        output_text = output_quality_val or "Resolution & size will appear here"
+        styles_text = f"{styles_count} styles · {selected_style_label}"
+
+        st.markdown(
+            f"""
+            <div class="metric-row-studio">
+                <div class="metric-card-studio">
+                    <div class="metric-label">Processing Time</div>
+                    <div class="metric-value">{processing_text}</div>
+                    <div class="metric-caption">Measured from AI start to finish.</div>
+                </div>
+                <div class="metric-card-studio">
+                    <div class="metric-label">Output Quality</div>
+                    <div class="metric-value">{output_text}</div>
+                    <div class="metric-caption">Based on processed image resolution & size.</div>
+                </div>
+                <div class="metric-card-studio">
+                    <div class="metric-label">Style Options</div>
+                    <div class="metric-value">{styles_text}</div>
+                    <div class="metric-caption">Choose any card on the right.</div>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
 # ─────────────────────────────────────────────
 # MY IMAGES PANEL
