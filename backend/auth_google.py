@@ -3,30 +3,64 @@ import json
 import secrets
 from pathlib import Path
 from urllib.parse import urlencode
+import streamlit as st
 from authlib.integrations.requests_client import OAuth2Session
 
 from backend.auth import hash_password
 from database.db import get_connection
 from datetime import datetime
 
-
-REDIRECT_URI = "http://localhost:8501"
+# Allow REDIRECT_URI to be configured via environment variable
+REDIRECT_URI = os.getenv("REDIRECT_URI", "http://localhost:8501")
 
 AUTHORIZE_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 USERINFO_URL = "https://www.googleapis.com/oauth2/v3/userinfo"
 
 
-def load_google_credentials() -> dict:
+def load_google_credentials() -> dict | None:
     """
-    Loads Google OAuth credentials using one of two strategies (in order):
-      1. backend/auth/google_credentials.json  (downloaded from Google Cloud Console)
-      2. Environment variables: GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET (.env file)
+    Loads Google OAuth credentials using one of three strategies (in strict priority order):
+      1. st.secrets (Streamlit's native way for cloud deployment)
+      2. Environment variables: GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET (.env file via load_dotenv)
+      3. backend/auth/google_credentials.json (local fallback downloaded from Google Cloud Console)
 
     Neither the JSON file nor the .env file should ever be committed to the repository.
     See .env.example for a template.
     """
-    # ── Strategy 1: JSON file ─────────────────────────────────────────────────
+    # ── Strategy 1: Streamlit secrets ─────────────────────────────────────────
+    try:
+        # Using .get() prevents KeyError if secrets exist but the specific key doesn't
+        # Accessing st.secrets at all can throw StreamlitAPIException/FileNotFoundError
+        # if the .streamlit/secrets.toml file doesn't exist.
+        google_id = st.secrets.get("GOOGLE_CLIENT_ID")
+        google_secret = st.secrets.get("GOOGLE_CLIENT_SECRET")
+        if google_id and google_secret:
+            return {
+                "client_id": google_id,
+                "client_secret": google_secret,
+                "auth_uri": AUTHORIZE_URL,
+                "token_uri": TOKEN_URL,
+            }
+    except Exception:
+        pass
+
+    # ── Strategy 2: Environment variables (.env or system env) ────────────────
+    from dotenv import load_dotenv
+    load_dotenv()
+
+    client_id = os.getenv("GOOGLE_CLIENT_ID")
+    client_secret = os.getenv("GOOGLE_CLIENT_SECRET")
+
+    if client_id and client_secret:
+        return {
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "auth_uri": AUTHORIZE_URL,
+            "token_uri": TOKEN_URL,
+        }
+
+    # ── Strategy 3: JSON file (local fallback) ────────────────────────────────
     # Search in common locations: backend/auth/ and root auth/
     possible_paths = [
         Path(__file__).resolve().parent / "auth" / "google_credentials.json",
@@ -44,38 +78,13 @@ def load_google_credentials() -> dict:
             creds = data.get("web") or data.get("installed")
             if creds and creds.get("client_id") and creds.get("client_secret"):
                 return creds
-            
-    # If file was found but invalid, or not found at all, we proceed to env vars
 
-    # ── Strategy 2: Environment variables (.env or system env) ────────────────
-    from dotenv import load_dotenv
-    load_dotenv()
+    # ── No credentials found ──────────────────────────────────────────────────
+    return None
 
-    client_id = os.getenv("GOOGLE_CLIENT_ID")
-    client_secret = os.getenv("GOOGLE_CLIENT_SECRET")
-
-    if client_id and client_secret:
-        return {
-            "client_id": client_id,
-            "client_secret": client_secret,
-            "auth_uri": AUTHORIZE_URL,
-            "token_uri": TOKEN_URL,
-        }
-
-    # ── Neither strategy worked ───────────────────────────────────────────────
-    raise FileNotFoundError(
-        "\n\n"
-        "⚠️  Google OAuth credentials not found.\n\n"
-        "Choose ONE of the following options:\n\n"
-        "  Option A — JSON file (recommended):\n"
-        "    1. Go to https://console.cloud.google.com → APIs & Services → Credentials\n"
-        "    2. Download your OAuth 2.0 Client JSON\n"
-        "    3. Save it to:  backend/auth/google_credentials.json\n\n"
-        "  Option B — Environment variables:\n"
-        "    1. Copy .env.example  →  .env\n"
-        "    2. Fill in GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET\n\n"
-        "⚠️  DO NOT commit either file to the repository.\n"
-    )
+def has_google_credentials() -> bool:
+    """Returns True if Google OAuth credentials are available."""
+    return load_google_credentials() is not None
 
 
 def get_google_auth_url(redirect_uri: str) -> tuple[str, str]:
@@ -83,6 +92,8 @@ def get_google_auth_url(redirect_uri: str) -> tuple[str, str]:
     Generates the Google OAuth 2.0 authorization URL and state.
     """
     creds = load_google_credentials()
+    if not creds:
+        return "", ""
     
     # Create an OAuth2 session using authlib
     session = OAuth2Session(
@@ -107,6 +118,8 @@ def process_google_callback(auth_code: str, state: str, redirect_uri: str) -> di
     """
     try:
         creds = load_google_credentials()
+        if not creds:
+            return {"success": False, "message": "Google authentication is not configured locally."}
         
         # Pass the state to the session for verification
         session = OAuth2Session(

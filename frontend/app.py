@@ -12,7 +12,7 @@ if str(ROOT_DIR) not in sys.path:
 
 from backend.auth import register_user
 from backend.auth_login import login_user
-from backend.auth_google import get_google_auth_url, process_google_callback, REDIRECT_URI
+from backend.auth_google import get_google_auth_url, process_google_callback, has_google_credentials, REDIRECT_URI
 from database.db import create_tables
 from frontend.user_profile import (
     sync_user_profile_state,
@@ -1059,25 +1059,35 @@ def render_auth_forms() -> None:
         st.rerun()
 
     def render_auth_intro(title, subtitle, google_text, divider_text):
-        google_url, state = get_google_auth_url(REDIRECT_URI)
-        st.session_state.oauth_state = state
+        has_creds = has_google_credentials()
         
-        # Link style button that behaves and looks like the existing auth-social-btn
+        btn_html = ""
+        if has_creds:
+            google_url, state = get_google_auth_url(REDIRECT_URI)
+            st.session_state.oauth_state = state
+            btn_html = f"""
+                <div class="auth-social-stack">
+                    <a href="{google_url}" target="_self" style="text-decoration: none; display: block;">
+                        <div class="auth-social-btn">
+                            <span class="auth-social-icon google">G</span>
+                            <span>{google_text}</span>
+                        </div>
+                    </a>
+                </div>
+                <div class="auth-divider"><span>{divider_text}</span></div>
+            """
+        else:
+            btn_html = f"""
+                <div class="auth-divider"><span>{divider_text}</span></div>
+            """
+
         st.markdown(
             f"""
             <div class="auth-shell-head">
                 <h2 class="auth-title">{title}</h2>
                 <p class="auth-subtitle">{subtitle}</p>
             </div>
-            <div class="auth-social-stack">
-                <a href="{google_url}" target="_self" style="text-decoration: none; display: block;">
-                    <div class="auth-social-btn">
-                        <span class="auth-social-icon google">G</span>
-                        <span>{google_text}</span>
-                    </div>
-                </a>
-            </div>
-            <div class="auth-divider"><span>{divider_text}</span></div>
+            {btn_html}
             """,
             unsafe_allow_html=True,
         )
@@ -1166,7 +1176,10 @@ def render_auth_forms() -> None:
 
                 st.session_state.logged_in = True
                 st.session_state.authenticated = True
+                st.session_state.is_logged_in = True
                 st.session_state.username = result.get("username")
+                st.session_state.user_name = result.get("username")
+                st.session_state.profile_image = None
                 st.session_state.email = result.get("email")
                 st.session_state.user_id = result.get("user_id")
                 set_user_profile_state(
@@ -1350,7 +1363,10 @@ if "code" in st.query_params:
         if result.get("success"):
             st.session_state.logged_in = True
             st.session_state.authenticated = True
+            st.session_state.is_logged_in = True
             st.session_state.username = result.get("username")
+            st.session_state.user_name = result.get("name") or result.get("username")
+            st.session_state.profile_image = result.get("profile_picture")
             st.session_state.email = result.get("email")
             st.session_state.user_id = result.get("user_id")
             set_user_profile_state(
@@ -1371,6 +1387,10 @@ if "flash_message" in st.session_state:
 
 with st.sidebar:
     request_auth_modal = bool(st.session_state.get("auth_modal_open"))
+    
+    if not has_google_credentials():
+        st.error("OAuth Credentials missing. See README.md for setup.")
+        
     render_sidebar_profile()
 
     if st.session_state.authenticated:

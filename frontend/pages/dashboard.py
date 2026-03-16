@@ -12,7 +12,7 @@ if str(ROOT_DIR) not in sys.path:
     sys.path.append(str(ROOT_DIR))
 
 from database.db import get_connection
-from frontend.user_profile import sync_user_profile_state
+from frontend.user_profile import sync_user_profile_state, render_sidebar_profile
 
 
 # ─────────────────────────────────────────────
@@ -503,14 +503,7 @@ section = st.session_state.get("dash_section", "dashboard")
 # ─────────────────────────────────────────────
 
 with st.sidebar:
-    # Custom profile header instead of the old render_sidebar_profile()
-    initial = username[0].upper() if username else "U"
-    st.markdown(f"""
-        <div class="sidebar-profile">
-            <div class="profile-avatar">{initial}</div>
-            <div class="profile-name">{username}</div>
-        </div>
-    """, unsafe_allow_html=True)
+    render_sidebar_profile()
 
     # Navigation — aligned to Figma
     if st.button("📊  Dashboard", use_container_width=True, type="primary" if section == "dashboard" else "secondary"):

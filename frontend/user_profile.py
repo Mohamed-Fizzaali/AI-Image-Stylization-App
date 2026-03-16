@@ -53,43 +53,48 @@ def sync_user_profile_state() -> None:
 
 
 def render_sidebar_profile() -> None:
-    """Render the sidebar profile card used on the landing page."""
+    """Render the sidebar profile card used across the app."""
     sync_user_profile_state()
+    is_logged_in = st.session_state.get("is_logged_in", st.session_state.get("logged_in", False))
 
-    if not st.session_state.get("authenticated"):
-        st.markdown(
-            """
-            <div class="sidebar-profile-card">
-                <div class="sidebar-profile-avatar">A</div>
-                <div class="sidebar-profile-name">Artify AI</div>
-                <div class="sidebar-profile-meta">Sign in to save your creations</div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
+    if not is_logged_in:
         return
 
-    user_name = str(st.session_state.get("user_name") or "User").strip() or "User"
+    user_name = st.session_state.get("user_name", "User")
     profile_image = st.session_state.get("profile_image")
-    login_method = st.session_state.get("login_method") or "local"
-    meta_label = "Signed in with Google" if login_method == "google" else "Signed in"
-    initials = "".join(part[:1] for part in user_name.split()[:2]).upper() or "U"
 
-    if profile_image:
-        avatar_html = (
-            f'<img class="sidebar-profile-image" src="{escape(profile_image, quote=True)}" '
-            f'alt="{escape(user_name, quote=True)}">'
-        )
-    else:
-        avatar_html = f'<div class="sidebar-profile-avatar">{escape(initials)}</div>'
+    if not profile_image:
+        safe_name = str(user_name).replace(" ", "+")
+        profile_image = f"https://ui-avatars.com/api/?name={safe_name}&background=random&rounded=true"
 
     st.markdown(
-        f"""
-        <div class="sidebar-profile-card">
-            {avatar_html}
-            <div class="sidebar-profile-name">{escape(user_name)}</div>
-            <div class="sidebar-profile-meta">{escape(meta_label)}</div>
-        </div>
+        """
+        <style>
+        div[data-testid="stSidebarUserContent"] img, 
+        .sidebar-avatar-img {
+            width: 70px !important;
+            height: 70px !important;
+            border-radius: 50% !important;
+            object-fit: cover !important;
+            border: 2px solid #4f7df2;
+            margin-left: auto;
+            margin-right: auto;
+            display: block;
+        }
+        </style>
         """,
-        unsafe_allow_html=True,
+        unsafe_allow_html=True
     )
+
+    with st.sidebar.container():
+        st.markdown(
+            f'''
+            <div style="text-align: center; margin-bottom: 2rem; margin-top: 0.5rem;">
+                <img src="{escape(profile_image, quote=True)}" class="sidebar-avatar-img" alt="Profile">
+                <div style="margin-top: 0.8rem;">
+                    <b>{escape(str(user_name))}</b>
+                </div>
+            </div>
+            ''',
+            unsafe_allow_html=True
+        )
