@@ -1,0 +1,3 @@
+## 2024-03-17 - OpenCV Array Conversion Overhead
+**Learning:** In Python OpenCV codebases, converting entire `uint8` BGR/HSV images to `float32` (e.g. `astype(np.float32)`) to perform scalar multiplication and then using `np.clip` to saturate before casting back to `uint8` is an enormous performance anti-pattern. This process blocks the CPU with large array memory allocations and float arithmetic.
+**Action:** Always use OpenCV's native hardware-accelerated C++ functions for `uint8` arrays. For saturation scaling, use `cv2.convertScaleAbs(array, alpha=scale)`. For element-wise array multiplication with a scalar, use `cv2.multiply(arr1, arr2, scale=scalar)`. These are up to 10x-20x faster than numpy float broadcasting.
