@@ -1108,7 +1108,7 @@ def render_editor() -> None:
                     record_mock_payment(user_id)
                     st.session_state["image_paid"] = True
                     st.rerun()
-            
+
             # Editor Favorite Toggle
             img_path_for_fav = st.session_state.get("current_image_path")
             if img_path_for_fav:
@@ -1667,7 +1667,7 @@ with st.sidebar:
 
 if section == "dashboard":
     # Header
-    
+
     st.markdown(f'<h1 class="dash-title">Welcome back, {username} 👋</h1>', unsafe_allow_html=True)
     st.markdown(
         '<p class="dash-sub">Here\'s an overview of your AI artwork activity.</p>',
@@ -1712,9 +1712,9 @@ if section == "dashboard":
     st.markdown(
         """
         <div class="rc-header">
-          <div>
-            <p class="rc-title">My Favorites</p>
-
+    # ── Cards or empty state ──
+    fav_creations = [item for item in recent_creations if item.get("is_favorite")]
+    if fav_creations:
 
             <p class="rc-sub">Your hand-picked AI-generated artwork</p>
           </div>
@@ -1725,7 +1725,7 @@ if section == "dashboard":
     )
 
     # ── Cards or empty state ──
-    fav_creations = [item for item in recent_creations if item.get("is_favorite")]
+    fav_creations = [item for item in recent_creations if item["processed_image_path"] in st.session_state.get("favorites", [])]
     if fav_creations:
         cards_html = '<div class="rc-grid">'
         download_data = []
@@ -2223,7 +2223,7 @@ elif section == "profile":
             <h1 style="color:#0f172a; font-size:1.8rem; font-weight:800; margin:0; padding:0; line-height:1;">Profile Settings</h1>
         </div>
     """, unsafe_allow_html=True)
-    
+
     # 2. Add full CSS block for the Profile page
     st.markdown("""
         <style>
@@ -2236,7 +2236,7 @@ elif section == "profile":
             padding: 24px;
             margin-bottom: 24px;
         }
-        
+
         /* Main Header Area inside the first card */
         .pf-header-row {
             display: flex;
@@ -2293,7 +2293,7 @@ elif section == "profile":
             margin: 0;
             font-weight: 500;
         }
-        
+
         /* Grid Area inside the first card */
         .pf-stats-grid {
             display: grid;
@@ -2331,7 +2331,7 @@ elif section == "profile":
         .pf-stat-purp { background: #faf5ff; color: #a855f7; }
         .pf-stat-pink { background: #fdf2f8; color: #ec4899; }
         .pf-stat-green{ background: #f0fdf4; color: #22c55e; }
-        
+
         .pf-stat-label {
             font-size: 0.7rem;
             text-transform: uppercase;
@@ -2349,7 +2349,7 @@ elif section == "profile":
             overflow: hidden;
             text-overflow: ellipsis;
         }
-        
+
         /* Account Info Section */
         .pf-section-title {
             font-size: 1.15rem;
@@ -2385,7 +2385,7 @@ elif section == "profile":
         .pf-input:hover {
             border-color: #cbd5e1;
         }
-        
+
         /* Button styling for Edit Profile HTML */
         .pf-edit-btn {
             background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
@@ -2413,7 +2413,7 @@ elif section == "profile":
     # 3. Main Profile Card (Header + Stats Grid)
     # Using a st.container to house the card so Streamlit widgets can be injected
     st.markdown('<div class="pf-card" style="padding-bottom: 0;">', unsafe_allow_html=True)
-    
+
     # Header Row with Avatar and Edit Button
     st.markdown(f"""
         <div class="pf-header-row">
@@ -2477,7 +2477,7 @@ elif section == "profile":
     # 4. Account Information Section (Bottom Card)
     st.markdown('<div class="pf-card">', unsafe_allow_html=True)
     st.markdown('<h2 class="pf-section-title">Account Information</h2>', unsafe_allow_html=True)
-    
+
     if st.session_state.get("edit_profile_mode"):
         with st.form("edit_profile_form"):
             new_name = st.text_input("Full Name", value=display_name)
@@ -2505,13 +2505,13 @@ elif section == "profile":
                 <label class="pf-label">Full Name</label>
                 <div class="pf-input">{display_name}</div>
             </div>
-            
+
             <div class="pf-form-group">
                 <label class="pf-label">Email Address</label>
                 <div class="pf-input">{display_email}</div>
             </div>
         """, unsafe_allow_html=True)
-        
+
     st.markdown('</div>', unsafe_allow_html=True)
-    
+
     st.markdown("<div style='height:.5rem'></div>", unsafe_allow_html=True)

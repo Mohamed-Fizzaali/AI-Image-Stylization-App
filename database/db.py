@@ -76,6 +76,9 @@ def create_tables():
     """)
 
     _ensure_column(cursor, "Users", "profile_picture", "profile_picture TEXT")
+    _ensure_column(cursor, "Users", "full_name", "full_name TEXT")
+    _ensure_column(cursor, "Users", "active_plan", "active_plan TEXT DEFAULT 'Starter'")
+    _ensure_column(cursor, "Users", "monthly_generations", "monthly_generations INTEGER DEFAULT 0")
 
     # -------------------------
     # TRANSACTIONS TABLE
@@ -95,6 +98,9 @@ def create_tables():
         );
     """)
 
+    _ensure_column(cursor, "Transactions", "razorpay_order_id", "razorpay_order_id TEXT")
+    _ensure_column(cursor, "Transactions", "razorpay_payment_id", "razorpay_payment_id TEXT")
+
     # -------------------------
     # IMAGE HISTORY TABLE
     # -------------------------
@@ -111,6 +117,8 @@ def create_tables():
                 ON DELETE CASCADE
         );
     """)
+
+    _ensure_column(cursor, "ImageHistory", "is_favorite", "is_favorite BOOLEAN DEFAULT 0")
 
     # -------------------------
     # INDEXES (Performance)
