@@ -1098,11 +1098,11 @@ def render_auth_forms() -> None:
     tab1, tab2 = st.columns(2)
 
     with tab1:
-        if st.button("Sign In", use_container_width=True):
+        if st.button("Sign In", width="stretch"):
             set_auth_page("login")
 
     with tab2:
-        if st.button("Register", use_container_width=True):
+        if st.button("Register", width="stretch"):
             set_auth_page("register")
 
     # ---------------- LOGIN ---------------- #
@@ -1146,7 +1146,7 @@ def render_auth_forms() -> None:
         login_submit = st.button(
             "Sign In",
             key="auth_submit_button_login",
-            use_container_width=True,
+            width="stretch",
             type="primary",
         )
 
@@ -1234,7 +1234,7 @@ def render_auth_forms() -> None:
         register_submit = st.button(
             "Create Account",
             key="auth_submit_button_register",
-            use_container_width=True,
+            width="stretch",
             type="primary",
         )
 
@@ -1389,10 +1389,10 @@ with st.sidebar:
     render_sidebar_profile()
 
     if st.session_state.authenticated:
-        if st.button("Open Dashboard", use_container_width=True, type="primary"):
+        if st.button("Open Dashboard", width="stretch", type="primary"):
             st.switch_page("pages/dashboard.py")
 
-        if st.button("Log out", use_container_width=True):
+        if st.button("Log out", width="stretch"):
             clear_user_profile_state()
             st.session_state.logged_in = False
             st.session_state.authenticated = False
@@ -1402,7 +1402,7 @@ with st.sidebar:
             st.session_state.auth_modal_open = False
             st.rerun()
     else:
-        if st.button("Sign In / Register", use_container_width=True, type="primary"):
+        if st.button("Sign In / Register", width="stretch", type="primary"):
             st.session_state.auth_modal_open = True
             request_auth_modal = True
 
@@ -1447,7 +1447,7 @@ with hero_showcase_shell:
             start_creating = st.button(
                 "Get Started Now →",
                 type="primary",
-                use_container_width=True,
+                width="stretch",
                 key="hero_get_started",
             )
             if start_creating:

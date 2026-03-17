@@ -6,6 +6,8 @@ from pathlib import Path
 from datetime import datetime
 from typing import cast
 
+import cv2
+import numpy as np
 import streamlit as st
 
 
@@ -17,11 +19,15 @@ from database.db import get_connection
 from frontend.user_profile import sync_user_profile_state, render_sidebar_profile
 from backend.image_upload import get_image_metadata, save_uploaded_image, validate_image
 from backend.image_processing import (
+    apply_watermark,
     bgr_to_rgb,
     classic_cartoon,
     encode_image_to_png,
+    grayscale_noir,
+    invert_neon,
     pencil_color_effect,
     read_image,
+    sepia_effect,
     sketch_effect,
 )
 
@@ -48,6 +54,59 @@ def _fmt_date(raw: str) -> str:
         return dt.strftime("%b %d, %Y")
     except Exception:
         return str(raw)
+
+
+def reset_editor() -> None:
+    keys_to_clear = ["current_image_path", "processed_image", "current_image_hash", "selected_style", "image_paid"]
+    for key in keys_to_clear:
+        if key in st.session_state:
+            del st.session_state[key]
+
+# ── Subscription tier defaults (safe to call on every run) ──
+if "active_plan" not in st.session_state:
+    st.session_state["active_plan"] = "Starter"
+if "monthly_generations" not in st.session_state:
+    st.session_state["monthly_generations"] = 0
+if "favorites" not in st.session_state:
+    st.session_state["favorites"] = []
+
+def toggle_favorite(img_path: str) -> None:
+    if img_path in st.session_state["favorites"]:
+        st.session_state["favorites"].remove(img_path)
+    else:
+        st.session_state["favorites"].append(img_path)
+
+
+def check_transaction(user_id: int | None) -> bool:
+    """Return True if the current user has at least one Completed transaction."""
+    if not user_id:
+        return False
+    try:
+        with get_connection() as conn:
+            c = conn.cursor()
+            c.execute(
+                "SELECT 1 FROM Transactions WHERE user_id=? AND payment_status='Completed' LIMIT 1",
+                (user_id,)
+            )
+            return c.fetchone() is not None
+    except Exception:
+        return False
+
+
+def record_mock_payment(user_id: int | None) -> None:
+    """Insert a Completed mock transaction for the current user."""
+    if not user_id:
+        return
+    try:
+        with get_connection() as conn:
+            c = conn.cursor()
+            c.execute(
+                "INSERT INTO Transactions (user_id, amount, payment_status, payment_method) VALUES (?, ?, 'Completed', 'Mock')",
+                (user_id, 0.0)
+            )
+            conn.commit()
+    except Exception:
+        pass
 
 
 # ─────────────────────────────────────────────
@@ -818,18 +877,42 @@ def render_editor() -> None:
             "description": "Bold outlines with vibrant colors.",
             "icon_url": "put image url",
             "popular": True,
+            "is_premium": False,
         },
         "sketch": {
             "label": "Sketch Art",
             "description": "Hand-drawn pencil technique.",
             "icon_url": "put image url",
             "popular": False,
+            "is_premium": False,
         },
         "pencil_color": {
             "label": "Pencil Color",
             "description": "Soft color pencil texture blend.",
             "icon_url": "put image url",
             "popular": False,
+            "is_premium": False,
+        },
+        "sepia": {
+            "label": "Retro Sepia",
+            "description": "Vintage warm tones.",
+            "icon_url": "https://placehold.co/150x150?text=Sepia",
+            "popular": False,
+            "is_premium": True,
+        },
+        "neon": {
+            "label": "Inverted Neon",
+            "description": "Cyberpunk glow.",
+            "icon_url": "https://placehold.co/150x150?text=Neon",
+            "popular": False,
+            "is_premium": True,
+        },
+        "noir": {
+            "label": "Cinematic Noir",
+            "description": "Dramatic grayscale.",
+            "icon_url": "https://placehold.co/150x150?text=Noir",
+            "popular": False,
+            "is_premium": True,
         },
     }
 
@@ -878,6 +961,11 @@ def render_editor() -> None:
                 help="Supported formats: JPG, JPEG, PNG, BMP. Max size: 10 MB.",
                 key="studio_uploader",
             )
+        else:
+            if st.button("➕ Start New Project", width="stretch"):
+                reset_editor()
+                st.session_state["dash_section"] = "editor"
+                st.rerun()
 
         if uploaded_file is not None:
             try:
@@ -923,16 +1011,21 @@ def render_editor() -> None:
                 a, b = st.columns(2, gap="small")
                 with a:
                     st.markdown('<div class="studio-img-center">', unsafe_allow_html=True)
-                    st.image(current_image_path, use_container_width=True)
+                    st.image(current_image_path, width="stretch")
                     st.markdown("</div>", unsafe_allow_html=True)
                 with b:
                     st.markdown('<div class="studio-img-center">', unsafe_allow_html=True)
                     if result_display is not None:
-                        st.image(result_display, use_container_width=True)
+                        # Show watermarked preview until paid
+                        if st.session_state.get("image_paid"):
+                            st.image(result_display, width="stretch")
+                        else:
+                            wm = apply_watermark(processed_image)
+                            st.image(bgr_to_rgb(wm) if wm.ndim == 3 else wm, width="stretch")
                     st.markdown("</div>", unsafe_allow_html=True)
             else:
                 st.markdown('<div class="studio-img-center">', unsafe_allow_html=True)
-                st.image(current_image_path, use_container_width=True)
+                st.image(current_image_path, width="stretch")
                 st.markdown("</div>", unsafe_allow_html=True)
 
         st.markdown("</div>", unsafe_allow_html=True)  # end custom-card
@@ -974,175 +1067,346 @@ def render_editor() -> None:
             unsafe_allow_html=True,
         )
 
+        # ── Payment gate: show after a style has been applied ──
+        if processed_image is not None:
+            st.markdown("<div style='margin-top:10px;'></div>", unsafe_allow_html=True)
+            if st.session_state.get("image_paid"):
+                # Clean (no-watermark) download
+                try:
+                    clean_bytes = encode_image_to_png(processed_image)
+                    style_label_dl = st.session_state.get("processed_style", "artify")
+                    fname = f"artify_{style_label_dl.lower().replace(' ', '_')}.png"
+                    st.download_button(
+                        "⬇  Download HD Image",
+                        data=clean_bytes,
+                        file_name=fname,
+                        mime="image/png",
+                        width="stretch",
+                        key="download_clean_img",
+                    )
+                except Exception:
+                    st.error("Could not prepare download.")
+            else:
+                st.info("🔒 Your result has a watermark. Simulate a payment to unlock the HD download.", icon="🔒")
+                if st.button("💳  Simulate Payment", width="stretch", type="primary", key="sim_payment_btn"):
+                    record_mock_payment(user_id)
+                    st.session_state["image_paid"] = True
+                    st.rerun()
+            
+            # Editor Favorite Toggle
+            img_path_for_fav = st.session_state.get("current_image_path")
+            if img_path_for_fav:
+                is_fav = img_path_for_fav in st.session_state["favorites"]
+                if st.button("❤️ Favorited" if is_fav else "🤍 Favorite", key="editor_fav_btn", width="stretch"):
+                    toggle_favorite(img_path_for_fav)
+                    st.rerun()
+
     with right_col:
-        # ── Build the full grid as a single HTML block ──────────────────────
-        # This is the only reliable way to achieve display:grid in Streamlit;
-        # injecting st.containers inside a CSS grid div breaks layout because
-        # Streamlit wraps each widget in its own block-level div.
 
-        cards_html_parts = []
-        for idx, (style_key, cfg) in enumerate(style_items):
-            is_selected = (style_key == selected_style_key)
-            selected_class = "style-card-selected" if is_selected else ""
-            popular_badge = (
-                '<span class="style-popular-badge">POPULAR</span>'
-                if cfg.get("popular") else ""
-            )
-            cards_html_parts.append(f"""
-            <div class="style-card-wrap {selected_class}">
-              {popular_badge}
-              <img src="https://placehold.co/150x150?text=Style"
-                   alt="{cfg['label']}" class="style-card-img" />
-              <p class="style-card-name">{cfg['label']}</p>
-              <p class="style-card-desc">{cfg['description']}</p>
-            </div>
-            """)
 
-        cards_html = "\n".join(cards_html_parts)
-
+        # ─── CSS ────────────────────────────────────────────────────────────
         st.markdown(
-            f"""
+            """
             <style>
-              /* ── Right panel wrapper ── */
-              .right-panel-card {{
-                background: #ffffff;
+            /* ── Panel wrapper ── */
+            .rp-card {
+                background: #fff;
                 border-radius: 15px;
                 border: 1px solid rgba(226,232,240,0.95);
                 box-shadow: 0 18px 44px rgba(15,23,42,0.08);
-                padding: 16px 16px 14px 16px;
+                padding: 16px 16px 12px;
                 box-sizing: border-box;
-              }}
-              .right-panel-title {{
-                font-size: 0.9rem; font-weight: 800; color: #0f172a; margin: 0;
-              }}
-              .right-panel-desc {{
-                font-size: 0.78rem; color: #64748b; margin: 0 0 12px 0;
-              }}
+            }
+            .rp-title { font-size:.9rem; font-weight:800; color:#0f172a; margin:0; }
+            .rp-desc  { font-size:.78rem; color:#64748b; margin:0 0 14px; }
 
-              /* ── Scrollable fixed-height grid container ── */
-              .style-grid-scroll {{
+            /* ── Scroll area (fixed height) ── */
+            .rp-scroll {
                 height: 550px;
                 overflow-y: auto;
-                padding-right: 6px;
+                overflow-x: hidden;
                 box-sizing: border-box;
-              }}
-              .style-grid-scroll::-webkit-scrollbar {{ width: 8px; }}
-              .style-grid-scroll::-webkit-scrollbar-thumb {{
-                background: rgba(148,163,184,0.5);
+            }
+            .rp-scroll::-webkit-scrollbar { width: 5px; }
+            .rp-scroll::-webkit-scrollbar-track { background: transparent; }
+            .rp-scroll::-webkit-scrollbar-thumb {
+                background: rgba(148,163,184,0.45);
                 border-radius: 999px;
-                border: 2px solid rgba(255,255,255,0.9);
-              }}
+            }
 
-              /* ── 2-column grid ── */
-              .style-grid-inner {{
-                display: grid;
-                grid-template-columns: repeat(2, 1fr);
-                gap: 16px;
-                box-sizing: border-box;
-              }}
-
-              /* ── Individual card ── */
-              .style-card-wrap {{
-                position: relative;
-                background: #ffffff;
-                border-radius: 12px;
+            /* ── Card body (pure HTML, no click needed here) ── */
+            .sc-body {
+                background: #fff;
+                border-radius: 12px 12px 0 0;
                 border: 1.5px solid rgba(226,232,240,0.95);
-                box-shadow: 0 4px 16px rgba(15,23,42,0.07);
-                padding: 14px;
+                border-bottom: none;
+                box-shadow: 0 4px 14px rgba(15,23,42,0.07);
+                padding: 12px 12px 8px;
                 box-sizing: border-box;
-                transition: box-shadow 160ms ease, transform 160ms ease;
-                cursor: pointer;
-              }}
-              .style-card-wrap:hover {{
-                transform: translateY(-2px);
-                box-shadow: 0 10px 28px rgba(15,23,42,0.13);
-                border-color: rgba(79,125,242,0.4);
-              }}
-              .style-card-selected {{
-                border: 2px solid #4f7df2 !important;
+                position: relative;
+                transition: border-color 160ms ease, box-shadow 160ms ease;
+            }
+            .sc-body.sc-selected {
+                border-color: #4f7df2 !important;
+                border-width: 2px !important;
                 box-shadow: 0 6px 24px rgba(79,125,242,0.22) !important;
-              }}
-
-              /* ── Thumbnail image ── */
-              .style-card-img {{
-                width: 100%;
-                height: 90px;
-                object-fit: cover;
-                border-radius: 8px;
-                display: block;
-                margin-bottom: 10px;
+            }
+            .sc-img {
+                width: 100%; height: 85px;
+                object-fit: cover; border-radius: 8px;
+                display: block; margin-bottom: 8px;
                 border: 1px solid rgba(226,232,240,0.8);
-              }}
+            }
+            .sc-name { font-size:.88rem; font-weight:800; color:#0f172a; margin:0 0 3px; }
+            .sc-desc { font-size:.73rem; color:#64748b; margin:0; line-height:1.44; }
 
-              /* ── Text ── */
-              .style-card-name {{
-                font-size: 0.88rem; font-weight: 800;
-                color: #0f172a; margin: 0 0 4px 0;
-              }}
-              .style-card-desc {{
-                font-size: 0.75rem; color: #64748b;
-                margin: 0; line-height: 1.45;
-              }}
+            /* ── ✓ Badge ── */
+            .sc-check {
+                position: absolute; top:8px; left:8px;
+                width:19px; height:19px; border-radius:50%;
+                background:#4f7df2; color:#fff;
+                font-size:.65rem; font-weight:900;
+                display:flex; align-items:center; justify-content:center;
+                box-shadow:0 2px 7px rgba(79,125,242,0.45);
+            }
+            /* ── POPULAR badge ── */
+            .sc-popular {
+                position: absolute; top:8px; right:8px;
+                font-size:.6rem; font-weight:800;
+                letter-spacing:.09em; text-transform:uppercase;
+                color:#fff;
+                background: linear-gradient(135deg,#f97316,#ec4899);
+                padding:.16rem .44rem; border-radius:999px;
+                box-shadow:0 3px 10px rgba(236,72,153,.35);
+            }
 
-              /* ── POPULAR badge ── */
-              .style-popular-badge {{
-                position: absolute;
-                top: 10px; right: 10px;
-                font-size: 0.62rem; font-weight: 800;
-                letter-spacing: 0.09em; text-transform: uppercase;
-                color: #ffffff;
-                background: linear-gradient(135deg, #f97316, #ec4899);
-                padding: 0.18rem 0.48rem;
-                border-radius: 999px;
-                box-shadow: 0 4px 12px rgba(236,72,153,0.35);
-                pointer-events: none;
-              }}
+            /* ── Select button — attached to bottom of card body ── */
+            /* Target each named container for the overall selected border */
+            [class*="st-key-card_slot_"] .stButton button {
+                border-radius: 0 0 12px 12px !important;
+                border: 1.5px solid rgba(226,232,240,0.95) !important;
+                border-top: none !important;
+                width: 100% !important;
+                font-size: 0.78rem !important;
+                font-weight: 700 !important;
+                padding: 0.4rem 0 !important;
+                cursor: pointer !important;
+                transition: background 160ms ease, color 160ms ease !important;
+                background: #f8fafc !important;
+                color: #64748b !important;
+                box-shadow: none !important;
+            }
+            [class*="st-key-card_slot_"] .stButton button:hover {
+                background: #eef2ff !important;
+                color: #4f7df2 !important;
+                border-color: rgba(79,125,242,0.35) !important;
+            }
+            /* Selected: primary button override */
+            [class*="st-key-card_slot_selected_"] .stButton button {
+                background: linear-gradient(135deg,#4f7df2,#18b8df) !important;
+                color: #fff !important;
+                border-color: #4f7df2 !important;
+                box-shadow: 0 4px 14px rgba(79,125,242,0.25) !important;
+            }
+            /* Selected card body border matches */
+            [class*="st-key-card_slot_selected_"] .sc-body {
+                border-color: #4f7df2 !important;
+                border-width: 2px !important;
+                box-shadow: 0 6px 24px rgba(79,125,242,0.2) !important;
+            }
+
+            /* Remove Streamlit's extra margin on buttons inside cards */
+            [class*="st-key-card_slot_"] .stButton { margin: 0 !important; }
+            [class*="st-key-card_slot_"] > div { margin-bottom: 0 !important; }
+
+            /* Gap row between card rows */
+            .rp-row-gap { height: 14px; }
             </style>
-
-            <div class="right-panel-card">
-              <p class="right-panel-title">Choose Art Style</p>
-              <p class="right-panel-desc">Select how you want to transform your image</p>
-              <div class="style-grid-scroll">
-                <div class="style-grid-inner">
-                  {cards_html}
-                </div>
-              </div>
-            </div>
             """,
             unsafe_allow_html=True,
         )
 
-        # ── Streamlit buttons for click handling (visually hidden) ─────────
-        # Rendered outside the HTML block; use compact columns to approximate
-        # the 2-column grid layout so vertical stacking stays minimal.
+        # ─── style the container so it looks like the panel card ─────────────
         st.markdown(
-            "<p style='font-size:0.8rem;font-weight:700;color:#374151;margin:12px 0 6px 0;'>"
-            "Select a style:</p>",
+            """
+            <style>
+            /* ── Make the rp_panel container the visual panel card ── */
+            [class*="st-key-rp_panel"] {
+                background: #fff !important;
+                border-radius: 15px !important;
+                border: 1px solid rgba(226,232,240,0.95) !important;
+                box-shadow: 0 18px 44px rgba(15,23,42,0.08) !important;
+                padding: 16px 16px 12px !important;
+                box-sizing: border-box !important;
+            }
+            .rp-title { font-size:.9rem; font-weight:800; color:#0f172a; margin:0 0 2px; }
+            .rp-desc  { font-size:.78rem; color:#64748b; margin:0 0 14px; }
+
+            /* ── Card body ── */
+            .sc-body {
+                background: #fff;
+                border-radius: 12px 12px 0 0;
+                border: 1.5px solid rgba(226,232,240,0.95);
+                border-bottom: none;
+                box-shadow: 0 4px 14px rgba(15,23,42,0.07);
+                padding: 12px 12px 8px;
+                box-sizing: border-box;
+                position: relative;
+                transition: border-color 160ms ease, box-shadow 160ms ease;
+            }
+            .sc-body.sc-selected {
+                border-color: #4f7df2 !important;
+                border-width: 2px !important;
+                box-shadow: 0 6px 24px rgba(79,125,242,0.22) !important;
+            }
+            .sc-img {
+                width:100%; height:85px; object-fit:cover;
+                border-radius:8px; display:block; margin-bottom:8px;
+                border:1px solid rgba(226,232,240,0.8);
+            }
+            .sc-name { font-size:.88rem; font-weight:800; color:#0f172a; margin:0 0 3px; }
+            .sc-desc { font-size:.73rem; color:#64748b; margin:0; line-height:1.44; }
+
+            /* ── ✓ badge ── */
+            .sc-check {
+                position:absolute; top:8px; left:8px;
+                width:19px; height:19px; border-radius:50%;
+                background:#4f7df2; color:#fff;
+                font-size:.65rem; font-weight:900;
+                display:flex; align-items:center; justify-content:center;
+                box-shadow:0 2px 7px rgba(79,125,242,0.45);
+            }
+            /* ── POPULAR badge ── */
+            .sc-popular {
+                position:absolute; top:8px; right:8px;
+                font-size:.6rem; font-weight:800;
+                letter-spacing:.09em; text-transform:uppercase; color:#fff;
+                background:linear-gradient(135deg,#f97316,#ec4899);
+                padding:.16rem .44rem; border-radius:999px;
+                box-shadow:0 3px 10px rgba(236,72,153,.35);
+            }
+
+            /* ── Select button fused to card bottom ── */
+            [class*="st-key-card_slot_"] .stButton button {
+                border-radius: 0 0 12px 12px !important;
+                border: 1.5px solid rgba(226,232,240,0.95) !important;
+                border-top: none !important;
+                width: 100% !important;
+                font-size: 0.78rem !important; font-weight: 700 !important;
+                padding: 0.4rem 0 !important;
+                background: #f8fafc !important; color: #64748b !important;
+                box-shadow: none !important;
+                transition: background 160ms ease, color 160ms ease !important;
+            }
+            [class*="st-key-card_slot_"] .stButton button:hover {
+                background: #eef2ff !important;
+                color: #4f7df2 !important;
+                border-color: rgba(79,125,242,0.35) !important;
+            }
+            [class*="st-key-card_slot_selected_"] .stButton button {
+                background: linear-gradient(135deg,#4f7df2,#18b8df) !important;
+                color: #fff !important;
+                border-color: #4f7df2 !important;
+                box-shadow: 0 4px 14px rgba(79,125,242,0.25) !important;
+            }
+            [class*="st-key-card_slot_selected_"] .sc-body {
+                border-color: #4f7df2 !important;
+                border-width: 2px !important;
+                box-shadow: 0 6px 24px rgba(79,125,242,0.2) !important;
+            }
+            [class*="st-key-card_slot_"] .stButton { margin:0 !important; }
+            [class*="st-key-card_slot_"] > div { margin-bottom:0 !important; }
+            .rp-row-gap { height:14px; }
+            </style>
+            """,
             unsafe_allow_html=True,
         )
-        btn_cols = st.columns(len(style_items))
-        for col, (style_key, cfg) in zip(btn_cols, style_items):
-            is_selected = (style_key == selected_style_key)
-            with col:
-                if st.button(
-                    ("✓ " if is_selected else "") + cfg["label"],
-                    key=f"select_style_{style_key}",
-                    use_container_width=True,
-                    type="primary" if is_selected else "secondary",
-                ):
-                    st.session_state.selected_style = style_key
-                    st.rerun()
+
+        # ─── Everything inside this container IS visually inside the panel ────
+        with st.container(key="rp_panel"):
+
+            # Header
+            st.markdown(
+                """
+                <p class="rp-title">Choose Art Style</p>
+                <p class="rp-desc">Select how you want to transform your image</p>
+                """,
+                unsafe_allow_html=True,
+            )
+
+            # ── Cards: st.columns(2) — true 2-column grid ────────────────────
+            n = len(style_items)
+            for row_start in range(0, n, 2):
+                row_items = style_items[row_start: row_start + 2]
+                grid_cols = st.columns(2, gap="small")
+
+                for gcol, (style_key, cfg) in zip(grid_cols, row_items):
+                    is_selected  = (style_key == selected_style_key)
+                    is_premium   = cfg.get("is_premium", False)
+                    is_locked    = is_premium and st.session_state.get("active_plan", "Starter") == "Starter"
+                    selected_cls = "sc-body sc-selected" if is_selected else "sc-body"
+                    slot_key     = (
+                        f"card_slot_selected_{style_key}"
+                        if is_selected else f"card_slot_{style_key}"
+                    )
+                    check_html   = '<span class="sc-check">✓</span>' if is_selected else ""
+                    popular_html = (
+                        '<span class="sc-popular">POPULAR</span>'
+                        if cfg.get("popular") else ""
+                    )
+
+                    with gcol:
+                        with st.container(key=slot_key):
+                            st.markdown(
+                                f"""
+                                <div class="{selected_cls}">
+                                  {check_html}{popular_html}
+                                  <img src="https://placehold.co/150x150?text=Style"
+                                       alt="{cfg['label']}" class="sc-img"/>
+                                  <p class="sc-name">{cfg['label']}{' 🔒' if is_locked else ''}</p>
+                                  <p class="sc-desc">{cfg['description']}</p>
+                                </div>
+                                """,
+                                unsafe_allow_html=True,
+                            )
+                            if is_locked:
+                                st.button(
+                                    "🔒 Pro Only",
+                                    key=f"select_style_{style_key}",
+                                    width="stretch",
+                                    disabled=True,
+                                )
+                            else:
+                                btn_label = "✓  Selected" if is_selected else "Select"
+                                if st.button(
+                                    btn_label,
+                                    key=f"select_style_{style_key}",
+                                    width="stretch",
+                                ):
+                                    st.session_state.selected_style = style_key
+                                    st.rerun()
+
+                if row_start + 2 < n:
+                    st.markdown('<div class="rp-row-gap"></div>', unsafe_allow_html=True)
 
     ready = bool(st.session_state.get("current_image_path")) and bool(st.session_state.get("selected_style"))
     transform_clicked = st.button(
         "🪄  Transform with AI  →",
         type="primary",
-        use_container_width=True,
+        width="stretch",
         key="transform_ai_btn",
         disabled=not ready,
     )
 
     if transform_clicked:
+        active_plan = st.session_state.get("active_plan", "Starter")
+        monthly_gen = st.session_state.get("monthly_generations", 0)
+
+        # Generation limit gate for Starter
+        if active_plan == "Starter" and monthly_gen >= 10:
+            st.error("⚠️ Monthly limit reached! You've used all 10 free generations. Upgrade to **Pro** for unlimited images.")
+            st.stop()
+
         image_path = st.session_state.get("current_image_path")
         style_key = cast(str, st.session_state.get("selected_style"))
 
@@ -1150,10 +1414,19 @@ def render_editor() -> None:
             t_start = time.time()
             try:
                 if style_key == "classic_cartoon":
-                    processed = classic_cartoon(image_path, k=8, edge_thickness=2)
+                    processed = classic_cartoon(image_path)
                     style_label = STYLE_CONFIG[style_key]["label"]
                 elif style_key == "sketch":
                     processed = sketch_effect(image_path)
+                    style_label = STYLE_CONFIG[style_key]["label"]
+                elif style_key == "sepia":
+                    processed = sepia_effect(image_path)
+                    style_label = STYLE_CONFIG[style_key]["label"]
+                elif style_key == "neon":
+                    processed = invert_neon(image_path)
+                    style_label = STYLE_CONFIG[style_key]["label"]
+                elif style_key == "noir":
+                    processed = grayscale_noir(image_path)
                     style_label = STYLE_CONFIG[style_key]["label"]
                 else:
                     processed = pencil_color_effect(image_path)
@@ -1166,10 +1439,11 @@ def render_editor() -> None:
                 st.session_state.output_quality = None
             else:
                 t_end = time.time()
-                st.session_state.last_time = round(t_end - t_start, 2)  # t_end - t_start
+                st.session_state.last_time = round(t_end - t_start, 2)
                 st.session_state.processed_image = processed
                 st.session_state.processed_style = style_label
-                # output quality shown dynamically in metrics; keep state clean
+                # Increment generation counter
+                st.session_state["monthly_generations"] = monthly_gen + 1
 
                 st.rerun()
 
@@ -1261,7 +1535,7 @@ with st.sidebar:
     with nav:
         if st.button(
             "📊  Dashboard",
-            use_container_width=True,
+            width="stretch",
             type="primary" if section == "dashboard" else "secondary",
             key="sb_nav_dashboard",
         ):
@@ -1270,7 +1544,7 @@ with st.sidebar:
 
         if st.button(
             "🪄  Image Editor",
-            use_container_width=True,
+            width="stretch",
             type="primary" if section == "editor" else "secondary",
             key="sb_nav_editor",
         ):
@@ -1279,7 +1553,7 @@ with st.sidebar:
 
         if st.button(
             "🕒  My Images",
-            use_container_width=True,
+            width="stretch",
             type="primary" if section == "my_images" else "secondary",
             key="sb_nav_my_images",
         ):
@@ -1288,7 +1562,7 @@ with st.sidebar:
 
         if st.button(
             "💳  Payments",
-            use_container_width=True,
+            width="stretch",
             type="primary" if section == "payments" else "secondary",
             key="sb_nav_payments",
         ):
@@ -1297,7 +1571,7 @@ with st.sidebar:
 
         if st.button(
             "👤  Profile",
-            use_container_width=True,
+            width="stretch",
             type="primary" if section == "profile" else "secondary",
             key="sb_nav_profile",
         ):
@@ -1309,7 +1583,7 @@ with st.sidebar:
         st.markdown('<hr class="sb-hr" />', unsafe_allow_html=True)
 
         # Logout remains neutral and separated at the bottom
-        if st.button("🚪  Log out", use_container_width=True, type="secondary", key="sb_logout"):
+        if st.button("🚪  Log out", width="stretch", type="secondary", key="sb_logout"):
             st.session_state.clear()
             st.switch_page("app.py")
             st.stop()
@@ -1361,13 +1635,13 @@ if section == "dashboard":
         unsafe_allow_html=True,
     )
 
-    # ── Recent Creations header ──
+    # ── My Favorites header ──
     st.markdown(
         """
         <div class="rc-header">
           <div>
-            <p class="rc-title">Recent Creations</p>
-            <p class="rc-sub">Your latest AI-generated artwork</p>
+            <p class="rc-title">My Favorites</p>
+            <p class="rc-sub">Your hand-picked AI-generated artwork</p>
           </div>
           <a class="rc-view-all" href="#">View All →</a>
         </div>
@@ -1376,11 +1650,12 @@ if section == "dashboard":
     )
 
     # ── Cards or empty state ──
-    if recent_creations:
+    fav_creations = [item for item in recent_creations if item["processed_image_path"] in st.session_state.get("favorites", [])]
+    if fav_creations:
         cards_html = '<div class="rc-grid">'
-        download_data = []  # list of (img_bytes, filename, key)
+        download_data = []
 
-        for idx, item in enumerate(recent_creations[:8]):
+        for idx, item in enumerate(fav_creations[:8]):
             img_path = item["processed_image_path"]
             style    = item["style_applied"]
             date_str = _fmt_date(item["processing_date"])
@@ -1401,9 +1676,19 @@ if section == "dashboard":
             </div>
             """
             try:
-                img_bytes = Path(img_path).read_bytes()
+                _active_plan_dl = st.session_state.get("active_plan", "Starter")
+                raw_img = read_image(img_path)
+                if raw_img is not None and _active_plan_dl == "Starter":
+                    h_raw, w_raw = raw_img.shape[:2]
+                    if w_raw > 1280:
+                        scale = 1280 / w_raw
+                        raw_img = cv2.resize(raw_img, (1280, int(h_raw * scale)), interpolation=cv2.INTER_AREA)
+                    raw_img = apply_watermark(raw_img)
+                    img_bytes = encode_image_to_png(raw_img)
+                else:
+                    img_bytes = Path(img_path).read_bytes()
                 fname = f"artify_{style.lower().replace(' ','_')}.png"
-                download_data.append((img_bytes, fname, f"dl_{idx}"))
+                download_data.append((img_bytes, fname, f"dl_fav_{idx}"))
             except Exception:
                 continue
 
@@ -1412,7 +1697,7 @@ if section == "dashboard":
 
         # Download buttons aligned to cards
         COLS = 4
-        for row_start in range(0, len(recent_creations[:8]), COLS):
+        for row_start in range(0, len(fav_creations[:8]), COLS):
             chunk = download_data[row_start: row_start + COLS]
             cols  = st.columns(len(chunk))
             for col, (data, fname, key) in zip(cols, chunk):
@@ -1421,16 +1706,16 @@ if section == "dashboard":
                         st.download_button(
                             "⬇  Download", data=data,
                             file_name=fname, mime="image/png",
-                            key=key, use_container_width=True,
+                            key=key, width="stretch",
                         )
     else:
         st.markdown(
             """
             <div class="rc-empty">
-                <span class="rc-empty-icon">✨</span>
-                <p class="rc-empty-title">No creations yet</p>
+                <span class="rc-empty-icon">❤️</span>
+                <p class="rc-empty-title">No favorites yet</p>
                 <p class="rc-empty-text">
-                    Start by creating your first cartoon in the Image Editor tab.
+                    No favorites yet. Heart an image in 'My Images' to see it here!
                 </p>
             </div>
             """,
@@ -1455,7 +1740,8 @@ elif section == "my_images":
 
     if recent_creations:
         cards_html = '<div class="rc-grid">'
-        download_data = []  # list of (img_bytes, filename, key)
+        from typing import List, Tuple, Any
+        download_data: List[Tuple[Any, str, str, str]] = []  # list of (img_bytes, filename, key, path)
         for idx, item in enumerate(recent_creations):
             img_path = item["processed_image_path"]
             style    = item["style_applied"]
@@ -1477,9 +1763,20 @@ elif section == "my_images":
             </div>
             """
             try:
-                img_bytes = Path(img_path).read_bytes()
+                _active_plan_dl = st.session_state.get("active_plan", "Starter")
+                raw_img = read_image(img_path)
+                if raw_img is not None and _active_plan_dl == "Starter":
+                    # 720p cap + watermark for Starter
+                    h_raw, w_raw = raw_img.shape[:2]
+                    if w_raw > 1280:
+                        scale = 1280 / w_raw
+                        raw_img = cv2.resize(raw_img, (1280, int(h_raw * scale)), interpolation=cv2.INTER_AREA)
+                    raw_img = apply_watermark(raw_img)
+                    img_bytes = encode_image_to_png(raw_img)
+                else:
+                    img_bytes = Path(img_path).read_bytes()
                 fname = f"artify_{style.lower().replace(' ','_')}.png"
-                download_data.append((img_bytes, fname, f"dl_idx_myimg_{idx}"))
+                download_data.append((img_bytes, fname, f"dl_idx_myimg_{idx}", img_path))
             except Exception:
                 continue
 
@@ -1490,21 +1787,25 @@ elif section == "my_images":
         for row_start in range(0, len(recent_creations), COLS):
             chunk = download_data[row_start: row_start + COLS]
             cols  = st.columns(len(chunk))
-            for col, (data, fname, key) in zip(cols, chunk):
+            for col, (data, fname, key, img_path) in zip(cols, chunk):
                 with col:
                     if data and fname and key:
                         st.download_button(
                             "⬇  Download", data=data,
                             file_name=fname, mime="image/png",
-                            key=key, use_container_width=True,
+                            key=key, width="stretch",
                         )
+                        is_fav = img_path in st.session_state["favorites"]
+                        if st.button("❤️ Favorited" if is_fav else "🤍 Favorite", key=f"fav_{key}", width="stretch"):
+                            toggle_favorite(img_path)
+                            st.rerun()
     else:
         st.markdown(
             """
             <div class="rc-empty">
                 <span class="rc-empty-icon">✨</span>
                 <p class="rc-empty-title">No creations yet</p>
-                <p class="rc-empty-text">Start by creating your first cartoon in the Image Editor.</p>
+                <p class="rc-empty-text">You haven't processed any images yet.</p>
             </div>
             """, unsafe_allow_html=True
         )
@@ -1514,43 +1815,559 @@ elif section == "my_images":
 # ─────────────────────────────────────────────
 
 elif section == "payments":
-    st.markdown('<h1 class="dash-title">Payment History</h1>', unsafe_allow_html=True)
-    st.markdown('<p class="dash-sub">All your completed and pending transactions.</p>', unsafe_allow_html=True)
 
-    with st.container():
-        if transactions:
-            st.dataframe(transactions, use_container_width=True, hide_index=True)
+    # ── Initialise subscription state ──────────────────────────────────────
+    sub_defaults = {
+        "plan_name": "Starter",
+        "purchase_date": "N/A",
+        "expiry_date": "Never",
+    }
+    for k, v in sub_defaults.items():
+        if k not in st.session_state:
+            st.session_state[k] = v
+
+    from datetime import timedelta
+
+    def _activate_plan(plan: str) -> None:
+        now = datetime.now()
+        existing = st.session_state.get("plan_name", "Starter")
+        try:
+            exp = datetime.strptime(st.session_state.get("expiry_date", "Never"), "%Y-%m-%d")
+        except ValueError:
+            exp = now
+
+        if existing == plan and st.session_state.get("expiry_date") not in ("Never", "N/A"):
+            # Stack: extend by 30 days from current expiry
+            new_exp = exp + timedelta(days=30)
         else:
-            st.info("No transactions yet. Completed payments will appear here.")
+            # New plan or switch: reset window from today
+            new_exp = now + timedelta(days=30)
 
-    if st.button("← Back to Dashboard", use_container_width=False):
-        st.session_state["dash_section"] = "dashboard"
-        st.rerun()
+        st.session_state["plan_name"] = plan
+        st.session_state["purchase_date"] = now.strftime("%Y-%m-%d")
+        st.session_state["expiry_date"] = new_exp.strftime("%Y-%m-%d")
+
+    plan_name     = st.session_state.get("plan_name", "Starter")
+    purchase_date = st.session_state.get("purchase_date", "N/A")
+    expiry_date   = st.session_state.get("expiry_date", "Never")
+
+    # ── Pricing-page CSS ───────────────────────────────────────────────────
+    st.markdown("""
+    <style>
+    .pricing-header { text-align:center; padding: 1.5rem 0 0.5rem; }
+    .pricing-header .pill-badge {
+        display:inline-block; background:#eef2ff; color:#4f46e5;
+        font-size:.75rem; font-weight:700; padding:.3rem .9rem;
+        border-radius:999px; margin-bottom:.9rem; letter-spacing:.04em;
+    }
+    .pricing-header h1 {
+        font-size:2.1rem; font-weight:800; margin:0 0 .4rem; color:#0f172a;
+    }
+    .pricing-header p { color:#6c7a93; font-size:1rem; margin:0; }
+
+    .sub-banner {
+        background:#f8fafc; border:1.5px solid #e2e8f0;
+        border-radius:12px; padding:1rem 1.4rem;
+        display:flex; gap:2.5rem; align-items:center;
+        margin-bottom:1.6rem; flex-wrap:wrap;
+    }
+    .sub-banner .sb-item { display:flex; flex-direction:column; gap:.15rem; }
+    .sub-banner .sb-label { font-size:.7rem; font-weight:700; text-transform:uppercase;
+        letter-spacing:.08em; color:#94a3b8; }
+    .sub-banner .sb-value { font-size:.97rem; font-weight:700; color:#1e293b; }
+    .sub-banner .sb-badge {
+        background:#dcfce7; color:#16a34a; border-radius:999px;
+        font-size:.72rem; font-weight:700; padding:.2rem .7rem;
+    }
+
+    .pc-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:1.25rem;
+        margin-top:1rem; }
+
+    .pc-card {
+        background:#fff; border-radius:18px;
+        border:1.5px solid #e2e8f0;
+        box-shadow:0 6px 22px rgba(15,23,42,.06);
+        padding:1.6rem 1.4rem 1.4rem;
+        position:relative; display:flex; flex-direction:column; gap:.7rem;
+        transition:transform .2s, box-shadow .2s;
+    }
+    .pc-card:hover { transform:translateY(-3px); box-shadow:0 14px 36px rgba(15,23,42,.10); }
+    .pc-card.popular {
+        border-color:#6366f1;
+        box-shadow:0 10px 40px rgba(99,102,241,.18);
+    }
+
+    .pc-badge-popular {
+        position:absolute; top:-14px; left:50%; transform:translateX(-50%);
+        background:linear-gradient(90deg,#6366f1,#8b5cf6);
+        color:#fff; font-size:.73rem; font-weight:700; padding:.3rem 1.1rem;
+        border-radius:999px; white-space:nowrap; letter-spacing:.04em;
+    }
+    .pc-badge-current {
+        position:absolute; top:-14px; left:50%; transform:translateX(-50%);
+        background:#22c55e; color:#fff; font-size:.73rem; font-weight:700;
+        padding:.3rem 1.1rem; border-radius:999px; white-space:nowrap;
+    }
+
+    .pc-icon { font-size:2rem; margin-bottom:.2rem; }
+    .pc-name { font-size:1.15rem; font-weight:700; color:#1e293b; margin:0; }
+    .pc-price { display:flex; align-items:flex-end; gap:.25rem; margin:.1rem 0 .3rem; }
+    .pc-price .amt { font-size:2.1rem; font-weight:800; color:#1e293b; line-height:1; }
+    .pc-price .per { font-size:.85rem; color:#64748b; padding-bottom:.2rem; }
+    .pc-features { list-style:none; padding:0; margin:0; flex:1;
+        display:flex; flex-direction:column; gap:.45rem; }
+    .pc-features li { font-size:.88rem; color:#334155; display:flex; gap:.5rem; align-items:flex-start; }
+    .pc-features li span.fi { color:#6366f1; flex-shrink:0; }
+
+    .pc-btn {
+        width:100%; padding:.72rem 0; border-radius:10px; border:none;
+        font-size:.95rem; font-weight:700; cursor:pointer; margin-top:.4rem;
+        transition:opacity .18s;
+    }
+    .pc-btn-disabled {
+        background:#f1f5f9; color:#94a3b8; cursor:not-allowed;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    # ── Page header ────────────────────────────────────────────────────────
+    st.markdown("""
+    <div class="pricing-header">
+        <div class="pill-badge">🏷 Pricing Plans</div>
+        <h1>Choose Your Creative Power</h1>
+        <p>Select the perfect plan to unlock unlimited AI creativity</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # ── Current subscription banner ────────────────────────────────────────
+    st.markdown(f"""
+    <div class="sub-banner">
+        <div class="sb-item">
+            <span class="sb-label">Current Plan</span>
+            <span class="sb-value">{plan_name} Plan</span>
+        </div>
+        <div class="sb-item">
+            <span class="sb-label">Status</span>
+            <span class="sb-badge">Active</span>
+        </div>
+        <div class="sb-item">
+            <span class="sb-label">Purchase Date</span>
+            <span class="sb-value">{purchase_date}</span>
+        </div>
+        <div class="sb-item">
+            <span class="sb-label">Expiry Date</span>
+            <span class="sb-value">{expiry_date}</span>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # ── Pricing cards ──────────────────────────────────────────────────────
+    c1, c2, c3 = st.columns(3, gap="medium")
+
+    # STARTER
+    with c1:
+        is_current = plan_name == "Starter"
+        badge = '<span class="pc-badge-current">Current Plan</span>' if is_current else ""
+        st.html(f"""
+        <div class="pc-card">
+            {badge}
+            <div class="pc-icon">⚡</div>
+            <p class="pc-name">Starter</p>
+            <div class="pc-price">
+                <span class="amt">$0</span>
+                <span class="per">/forever</span>
+            </div>
+            <ul class="pc-features">
+                <li><span class="fi">✅</span> 10 images per month</li>
+                <li><span class="fi">✅</span> 3 basic styles</li>
+                <li><span class="fi">✅</span> Standard quality (720p)</li>
+                <li><span class="fi">✅</span> Email support</li>
+                <li><span class="fi">✅</span> Watermark on images</li>
+            </ul>
+        </div>
+        """)
+        if is_current:
+            st.button("Current Plan", key="btn_starter", disabled=True, width="stretch")
+        else:
+            if st.button("Get Started", key="btn_starter_go", width="stretch"):
+                _activate_plan("Starter")
+                st.rerun()
+
+    # PRO
+    with c2:
+        is_current = plan_name == "Pro"
+        badge = '<span class="pc-badge-current">Current Plan</span>' if is_current else '<span class="pc-badge-popular">⭐ Most Popular</span>'
+        st.html(f"""
+        <div class="pc-card popular">
+            {badge}
+            <div class="pc-icon">👑</div>
+            <p class="pc-name">Pro</p>
+            <div class="pc-price">
+                <span class="amt">$9.99</span>
+                <span class="per">/per month</span>
+            </div>
+            <ul class="pc-features">
+                <li><span class="fi">✅</span> Unlimited images</li>
+                <li><span class="fi">✅</span> All 6+ premium styles</li>
+                <li><span class="fi">✅</span> High quality (1080p)</li>
+                <li><span class="fi">✅</span> Priority support</li>
+                <li><span class="fi">✅</span> No watermark</li>
+            </ul>
+        </div>
+        """)
+        if is_current:
+            if st.button("Extend 30 Days", key="btn_pro_extend", type="primary", width="stretch"):
+                _activate_plan("Pro")
+                st.session_state["active_plan"] = "Pro"
+                st.session_state["monthly_generations"] = 0
+                st.rerun()
+        else:
+            if st.button("Get Started", key="btn_pro_go", type="primary", width="stretch"):
+                _activate_plan("Pro")
+                st.session_state["active_plan"] = "Pro"
+                st.session_state["monthly_generations"] = 0
+                st.rerun()
+
+    # ENTERPRISE
+    with c3:
+        is_current = plan_name == "Enterprise"
+        badge = '<span class="pc-badge-current">Current Plan</span>' if is_current else ""
+        st.html(f"""
+        <div class="pc-card">
+            {badge}
+            <div class="pc-icon">💎</div>
+            <p class="pc-name">Enterprise</p>
+            <div class="pc-price">
+                <span class="amt">$29.99</span>
+                <span class="per">/per month</span>
+            </div>
+            <ul class="pc-features">
+                <li><span class="fi">✅</span> Unlimited images</li>
+                <li><span class="fi">✅</span> Custom style creation</li>
+                <li><span class="fi">✅</span> Ultra quality (4K)</li>
+                <li><span class="fi">✅</span> 24/7 dedicated support</li>
+                <li><span class="fi">✅</span> White-label option</li>
+            </ul>
+        </div>
+        """)
+        if is_current:
+            if st.button("Extend 30 Days", key="btn_ent_extend", width="stretch"):
+                _activate_plan("Enterprise")
+                st.session_state["active_plan"] = "Enterprise"
+                st.session_state["monthly_generations"] = 0
+                st.rerun()
+        else:
+            if st.button("Get Started", key="btn_ent_go", width="stretch"):
+                _activate_plan("Enterprise")
+                st.session_state["active_plan"] = "Enterprise"
+                st.session_state["monthly_generations"] = 0
+                st.rerun()
+
+
 
 # ─────────────────────────────────────────────
 # PROFILE PANEL
 # ─────────────────────────────────────────────
 
 elif section == "profile":
-    st.markdown('<h1 class="dash-title">Profile Settings</h1>', unsafe_allow_html=True)
-    st.markdown('<p class="dash-sub">Your account details and security information.</p>', unsafe_allow_html=True)
 
-    c1, c2 = st.columns(2, gap="large")
-    with c1:
-        with st.container(border=True):
-            st.markdown("#### Account details")
-            st.write(f"**Username:** {username}")
-            st.write(f"**Email:** {email}")
-            st.write(f"**Member since:** {profile['created_at']}")
-            st.write(f"**Last login:** {profile['last_login']}")
-    with c2:
-        with st.container(border=True):
-            st.markdown("#### Security")
-            st.write(f"**Active:** {'Yes' if profile['is_active'] else 'No'}")
-            st.write(f"**Locked:** {'Yes' if profile['account_locked'] else 'No'}")
-            st.write(f"**Failed login attempts:** {profile['failed_attempts']}")
+    # Fallbacks in case user data is missing
+    display_name = username if username else "John Doe"
+    display_email = email if email else "john.doe@example.com"
+    initials = display_name[:2].upper() if display_name else "JD"
+    since_date = "Jan 2026"
+    if profile.get("created_at") and profile["created_at"] != "N/A":
+        try:
+            since_dt = datetime.strptime(str(profile["created_at"]).split()[0], "%Y-%m-%d")
+            since_date = since_dt.strftime("%b %Y")
+        except Exception:
+            since_date = str(profile["created_at"])
 
-    st.markdown("<div style='height:.75rem'></div>", unsafe_allow_html=True)
-    if st.button("← Back to Dashboard", use_container_width=False):
-        st.session_state["dash_section"] = "dashboard"
+    # 1. Page Header
+    st.markdown("""
+        <div style="display:flex; align-items:center; gap:12px; margin-bottom: 2rem;">
+            <div style="width:40px; height:40px; border-radius:10px; background:linear-gradient(135deg, #7c3aed, #4f46e5); display:flex; align-items:center; justify-content:center; color:white; font-size:20px;">
+                👤
+            </div>
+            <h1 style="color:#0f172a; font-size:1.8rem; font-weight:800; margin:0; padding:0; line-height:1;">Profile Settings</h1>
+        </div>
+    """, unsafe_allow_html=True)
+    
+    # 2. Add full CSS block for the Profile page
+    st.markdown("""
+        <style>
+        /* Card Containers */
+        .pf-card {
+            background: #ffffff;
+            border-radius: 16px;
+            box-shadow: 0 10px 40px rgba(15, 23, 42, 0.04);
+            border: 1px solid rgba(226, 232, 240, 0.8);
+            padding: 24px;
+            margin-bottom: 24px;
+        }
+        
+        /* Main Header Area inside the first card */
+        .pf-header-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 24px;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+        .pf-user-info {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+        .pf-avatar {
+            width: 88px;
+            height: 88px;
+            border-radius: 20px;
+            background: linear-gradient(135deg, #4f46e5 0%, #d946ef 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #ffffff;
+            font-size: 32px;
+            font-weight: 800;
+            position: relative;
+            box-shadow: 0 12px 24px rgba(79, 70, 229, 0.25);
+        }
+        .pf-avatar-cam {
+            position: absolute;
+            bottom: -6px;
+            right: -6px;
+            background: #ffffff;
+            border-radius: 50%;
+            width: 28px;
+            height: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+            font-size: 14px;
+            color: #64748b;
+        }
+        .pf-name {
+            font-size: 1.5rem;
+            font-weight: 800;
+            color: #0f172a;
+            margin: 0 0 4px 0;
+            line-height:1;
+        }
+        .pf-email {
+            font-size: 0.95rem;
+            color: #64748b;
+            margin: 0;
+            font-weight: 500;
+        }
+        
+        /* Grid Area inside the first card */
+        .pf-stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 16px;
+        }
+        @media (max-width: 800px) {
+            .pf-stats-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+        .pf-stat {
+            background: rgba(248, 250, 252, 0.5);
+            border-radius: 12px;
+            padding: 16px;
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            border: 1px solid rgba(226, 232, 240, 0.6);
+            transition: transform 150ms ease;
+        }
+        .pf-stat:hover {
+            transform: translateY(-2px);
+        }
+        .pf-stat-icon {
+            width: 44px;
+            height: 44px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+        }
+        .pf-stat-blue { background: #eff6ff; color: #3b82f6; }
+        .pf-stat-purp { background: #faf5ff; color: #a855f7; }
+        .pf-stat-pink { background: #fdf2f8; color: #ec4899; }
+        .pf-stat-green{ background: #f0fdf4; color: #22c55e; }
+        
+        .pf-stat-label {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: #64748b;
+            margin: 0 0 2px 0;
+            font-weight: 700;
+        }
+        .pf-stat-val {
+            font-size: 0.95rem;
+            font-weight: 800;
+            color: #0f172a;
+            margin: 0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        /* Account Info Section */
+        .pf-section-title {
+            font-size: 1.15rem;
+            font-weight: 800;
+            color: #0f172a;
+            margin: 0 0 20px 0;
+        }
+        .pf-form-group {
+            margin-bottom: 20px;
+        }
+        .pf-label {
+            display: block;
+            font-size: 0.85rem;
+            font-weight: 700;
+            color: #334155;
+            margin-bottom: 8px;
+        }
+        .pf-input {
+            width: 100%;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            padding: 14px 16px;
+            font-size: 0.95rem;
+            color: #475569;
+            font-weight: 500;
+            font-family: inherit;
+            box-sizing: border-box;
+            outline: none;
+            cursor: not-allowed;
+            transition: border-color 200ms ease;
+        }
+        .pf-input:hover {
+            border-color: #cbd5e1;
+        }
+        
+        /* Button styling for Edit Profile HTML */
+        .pf-edit-btn {
+            background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
+            color: white !important;
+            border: none;
+            border-radius: 999px;
+            padding: 10px 24px;
+            font-size: 0.95rem;
+            font-weight: 700;
+            cursor: pointer;
+            box-shadow: 0 8px 20px rgba(99, 102, 241, 0.3);
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            transition: transform 150ms ease, box-shadow 150ms ease;
+        }
+        .pf-edit-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 24px rgba(99, 102, 241, 0.4);
+        }
+        </style>
+    """, unsafe_allow_html=True)
+
+    # 3. Main Profile Card (Header + Stats Grid)
+    # Using a st.container to house the card so Streamlit widgets can be injected
+    st.markdown('<div class="pf-card" style="padding-bottom: 0;">', unsafe_allow_html=True)
+    
+    # Header Row with Avatar and Edit Button
+    st.markdown(f"""
+        <div class="pf-header-row">
+            <div class="pf-user-info">
+                <div class="pf-avatar">
+                    {initials}
+                    <div class="pf-avatar-cam">📷</div>
+                </div>
+                <div>
+                    <p class="pf-name">{display_name}</p>
+                    <p class="pf-email">{display_email}</p>
+                </div>
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
+
+    # Inject Edit Button precisely via negative margin
+    st.markdown("<div style='display:flex; justify-content:flex-end; margin-top:-95px'>", unsafe_allow_html=True)
+    if st.button("⚙️ Edit Profile", key="btn_edit_profile"):
+        st.session_state["edit_profile_mode"] = not st.session_state.get("edit_profile_mode", False)
         st.rerun()
+    st.markdown("</div>", unsafe_allow_html=True)
+    st.markdown(f"""
+            <div class="pf-stats-grid" style="margin-top: 10px;">
+                <!-- Username -->
+                <div class="pf-stat pf-stat-blue" style="background:#f0f7ff; border-color:#dbeafe;">
+                    <div class="pf-stat-icon" style="background:#3b82f6; color:#fff;">👤</div>
+                    <div>
+                        <p class="pf-stat-label" style="color:#2563eb;">Username</p>
+                        <p class="pf-stat-val">{username}</p>
+                    </div>
+                </div>
+                <!-- Email -->
+                <div class="pf-stat pf-stat-purp" style="background:#faf5ff; border-color:#f3e8ff;">
+                    <div class="pf-stat-icon" style="background:#a855f7; color:#fff;">✉️</div>
+                    <div>
+                        <p class="pf-stat-label" style="color:#9333ea;">Email</p>
+                        <p class="pf-stat-val" title="{display_email}">{display_email[:12]}...</p>
+                    </div>
+                </div>
+                <!-- Member Since -->
+                <div class="pf-stat pf-stat-pink" style="background:#fdf2f8; border-color:#fce7f3;">
+                    <div class="pf-stat-icon" style="background:#ec4899; color:#fff;">📅</div>
+                    <div>
+                        <p class="pf-stat-label" style="color:#db2777;">Member Since</p>
+                        <p class="pf-stat-val">{since_date}</p>
+                    </div>
+                </div>
+                <!-- Status -->
+                <div class="pf-stat pf-stat-green" style="background:#f0fdf4; border-color:#dcfce7;">
+                    <div class="pf-stat-icon" style="background:#22c55e; color:#fff;">🛡️</div>
+                    <div>
+                        <p class="pf-stat-label" style="color:#16a34a;">Status</p>
+                        <p class="pf-stat-val">Active</p>
+                    </div>
+                </div>
+            </div>
+    """, unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    # 4. Account Information Section (Bottom Card)
+    st.markdown('<div class="pf-card">', unsafe_allow_html=True)
+    st.markdown('<h2 class="pf-section-title">Account Information</h2>', unsafe_allow_html=True)
+    
+    if st.session_state.get("edit_profile_mode"):
+        with st.form("edit_profile_form"):
+            new_name = st.text_input("Full Name", value=display_name)
+            new_email = st.text_input("Email Address", value=display_email)
+            if st.form_submit_button("Save Changes", type="primary"):
+                st.toast("Profile updated successfully! (Mock)", icon="✅")
+                st.session_state["edit_profile_mode"] = False
+                st.rerun()
+    else:
+        st.markdown(f"""
+            <div class="pf-form-group">
+                <label class="pf-label">Full Name</label>
+                <div class="pf-input">{display_name}</div>
+            </div>
+            
+            <div class="pf-form-group">
+                <label class="pf-label">Email Address</label>
+                <div class="pf-input">{display_email}</div>
+            </div>
+        """, unsafe_allow_html=True)
+        
+    st.markdown('</div>', unsafe_allow_html=True)
+    
+    st.markdown("<div style='height:.5rem'></div>", unsafe_allow_html=True)

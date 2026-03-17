@@ -525,132 +525,93 @@ def color_quantization(image: np.ndarray, k: int = 8) -> np.ndarray:
         sample_for_kmeans=True,
     )
 
-def classic_cartoon(
-    image_path: str | Path,
-    k: int = 8,
-    edge_thickness: int = 2,
-    bilateral_passes: int = 2,
-    edge_method: str = "adaptive",
-    quantize_downscale: bool = True,
-    soft_edges: bool = True,
-) -> np.ndarray:
+def classic_cartoon(image_path: str | Path) -> np.ndarray:
     """
-    Produce a full-color cartoon effect with bold black outlines.
-
-    Pipeline
-    --------
-    1. Read the image once from disk.
-    2. Apply several bilateral filter passes to strongly smooth colors.
-    3. Quantize colors using K-means (optionally on a downscaled sample).
-    4. Boost saturation and value slightly in HSV space.
-    5. Compute edges from the smoothed image (adaptive or Canny).
-    6. Thicken edges and apply morphological closing to close gaps.
-    7. Invert edges so background is white and outlines are black.
-    8. Optionally soften edges with a small Gaussian blur.
-    9. Convert to 3-channel and blend with the quantized colors using
-       ``cv2.bitwise_and`` so colors are preserved and outlines remain.
-
-    Parameters
-    ----------
-    image_path:
-        Path to the input image.
-    k:
-        Number of color clusters used for quantization.
-    edge_thickness:
-        Thickness of detected outlines (in pixels).
-    bilateral_passes:
-        Number of times to apply bilateral filtering for strong smoothing.
-    edge_method:
-        Edge detector to use: ``\"adaptive\"`` or ``\"canny\"``.
-    quantize_downscale:
-        Whether to downscale before running K-means for faster quantization.
-    soft_edges:
-        If True, apply a small Gaussian blur to inverted edges for
-        a slightly softer, hand-drawn look.
-
-    Returns
-    -------
-    np.ndarray
-        BGR cartoon image (uint8).
+    Produces a high-quality 'Studio Cartoon' effect using Gaussian Pyramids 
+    for algorithmic acceleration and morphological transformations for edges.
     """
-    if k <= 0:
-        raise ValueError("k must be a positive integer for classic_cartoon.")
-    if edge_thickness < 1:
-        raise ValueError("edge_thickness must be at least 1.")
-    if bilateral_passes < 1:
-        bilateral_passes = 1
-    if edge_method not in {"adaptive", "canny"}:
-        raise ValueError('edge_method must be either "adaptive" or "canny".')
-
+    # 1. Use your robust caching reader and validator
     image = read_image(image_path)
     image = _validate_bgr_image(image, "classic_cartoon")
 
-    # 1-2. Strong smoothing
-    smoothed = image.copy()
-    for _ in range(bilateral_passes):
-        smoothed = bilateral_filter(smoothed, d=9, sigmaColor=75, sigmaSpace=75)
+    # Extract exact width and height for safety during upsampling
+    h, w = image.shape[:2]
 
-    # 3. Color reduction via K-means on smoothed colors
-    quantized = color_quantization_from_array(
-        smoothed,
-        k=k,
-        downscale_for_kmeans=quantize_downscale,
-        sample_for_kmeans=quantize_downscale,
+    # -------------------------------------------------------------------------
+    # Phase 1: Color Abstraction via Gaussian Pyramids
+    # -------------------------------------------------------------------------
+    color_tensor = image.copy()
+    num_downsamples = 2
+    
+    # Downsample to drastically reduce bilateral filter complexity
+    for _ in range(num_downsamples):
+        color_tensor = cv2.pyrDown(color_tensor)
+
+    # Apply iterative bilateral filtering on the tiny spatial domain
+    for _ in range(5):
+        color_tensor = cv2.bilateralFilter(color_tensor, d=9, sigmaColor=9, sigmaSpace=7)
+
+    # Upsample back to approximate original size
+    for _ in range(num_downsamples):
+        color_tensor = cv2.pyrUp(color_tensor)
+        
+    # Force exact dimension match (pyrUp can shift odd-pixel dimensions by 1)
+    color_tensor = cv2.resize(color_tensor, (w, h), interpolation=cv2.INTER_CUBIC)
+
+    # -------------------------------------------------------------------------
+    # Phase 2: Color Quantization
+    # -------------------------------------------------------------------------
+    # Use your existing, memory-safe robust helper instead of custom math
+    quantized_image = color_quantization_from_array(color_tensor, k=12, downscale_for_kmeans=True)
+
+    # -------------------------------------------------------------------------
+    # Phase 3: Topological Edge Extraction and Morphological Refinement
+    # -------------------------------------------------------------------------
+    grayscale = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    blurred_gray = cv2.medianBlur(grayscale, 7)
+    
+    edges = cv2.adaptiveThreshold(
+        blurred_gray, 255, 
+        cv2.ADAPTIVE_THRESH_MEAN_C, 
+        cv2.THRESH_BINARY, 
+        blockSize=9, C=2
     )
+                                  
+    # Apply Morphological Closing to clean the binary mask
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
+    clean_edges = cv2.morphologyEx(edges, cv2.MORPH_CLOSE, kernel)
 
-    # 4. Slight HSV boost before applying edges
-    hsv = cv2.cvtColor(quantized, cv2.COLOR_BGR2HSV).astype(np.float32)
-    h, s, v = cv2.split(hsv)
-    s *= 1.15  # modest saturation boost
-    v *= 1.05  # slight value boost
-    hsv = cv2.merge((h, np.clip(s, 0, 255), np.clip(v, 0, 255)))
-    boosted = cv2.cvtColor(hsv.astype(np.uint8), cv2.COLOR_HSV2BGR)
+    # -------------------------------------------------------------------------
+    # Phase 4: Signal Fusion
+    # -------------------------------------------------------------------------
+    edge_3c = cv2.cvtColor(clean_edges, cv2.COLOR_GRAY2BGR)
+    final_cartoon = cv2.bitwise_and(quantized_image, edge_3c)
 
-    # 5. Edge extraction from smoothed image
-    if edge_method == "adaptive":
-        edges = adaptive_edge_from_array(smoothed, blur_ksize=5)
-    else:  # "canny"
-        edges = canny_edge_from_array(smoothed, threshold1=80, threshold2=180, blur_ksize=5)
-
-    # 6. Thicken edges and apply morphological closing
-    edges = thicken_edges(edges, edge_thickness)
-    close_kernel_size = _ensure_odd_kernel_size(edge_thickness * 2 + 1)
-    close_kernel = cv2.getStructuringElement(
-        cv2.MORPH_RECT, (close_kernel_size, close_kernel_size)
-    )
-    edges_closed = cv2.morphologyEx(edges, cv2.MORPH_CLOSE, close_kernel)
-
-    # 7-8. Invert and optionally soften edges
-    edges_inv = cv2.bitwise_not(edges_closed)
-    if soft_edges:
-        edges_inv = cv2.GaussianBlur(edges_inv, (3, 3), 0)
-
-    # 7-8-9. Convert to 3-channel and blend with colors
-    edges_3c = cv2.cvtColor(edges_inv, cv2.COLOR_GRAY2BGR)
-    cartoon = cv2.bitwise_and(boosted, edges_3c)
-
-    return cartoon
+    return final_cartoon
 
 
 def _sketch_from_array(
     image: np.ndarray,
-    use_clahe: bool = True,
-    canny_threshold1: int = 50,
-    canny_threshold2: int = 150,
+    blur_ksize: int = 21,
+    contrast: float = 1.15,
+    brightness: int = 10,
 ) -> np.ndarray:
     """
-    Internal helper that produces a grayscale pencil sketch from a BGR image.
+    Internal helper that produces a highly realistic grayscale pencil sketch.
+    Uses the Color Dodge blending technique for natural graphite shading
+    instead of harsh Canny edge lines.
 
     Parameters
     ----------
     image:
         Input BGR image (H, W, 3), dtype uint8.
-    use_clahe:
-        If True, apply CLAHE to enhance local contrast before sketching.
-    canny_threshold1:
-        Lower Canny edge threshold.
-    canny_threshold2:
-        Upper Canny edge threshold.
+    blur_ksize:
+        Kernel size for the Gaussian blur (must be odd). Larger values
+        create thicker, more dispersed pencil strokes.
+    contrast:
+        Alpha value to boost the contrast of the graphite lines.
+    brightness:
+        Beta value to ensure the paper background stays a crisp white.
 
     Returns
     -------
@@ -658,32 +619,25 @@ def _sketch_from_array(
         Single-channel grayscale sketch.
     """
     image = _validate_bgr_image(image, "_sketch_from_array")
+    
+    # 1. Convert to grayscale
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-
-    if use_clahe:
-        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-        gray = clahe.apply(gray)
-
-    # Smooth slightly
-    gray_blur = cv2.GaussianBlur(gray, (5, 5), 0)
-
-    # Strong edge extraction
-    edges = cv2.Canny(gray_blur, canny_threshold1, canny_threshold2)
-
-    # Invert edges
-    edges_inv = cv2.bitwise_not(edges)
-
-    # Dodge blending
-    inverted = cv2.bitwise_not(gray_blur)
-    blurred = cv2.GaussianBlur(inverted, (21, 21), 0)
-    dodge = cv2.divide(gray_blur, 255 - blurred, scale=256)
-
-    # Combine edges + dodge
-    sketch = cv2.bitwise_and(dodge, edges_inv)
-
-    # Increase clarity
-    sketch = cv2.convertScaleAbs(sketch, alpha=1.6, beta=15)
-
+    
+    # 2. Invert the grayscale image
+    inverted = cv2.bitwise_not(gray)
+    
+    # 3. Apply a strong Gaussian blur to the inverted image.
+    if blur_ksize % 2 == 0:
+        blur_ksize += 1
+    blurred = cv2.GaussianBlur(inverted, (blur_ksize, blur_ksize), sigmaX=0, sigmaY=0)
+    
+    # 4. Color Dodge Blend
+    inv_blurred = cv2.bitwise_not(blurred)
+    sketch = cv2.divide(gray, inv_blurred, scale=256.0)
+    
+    # 5. Clean up the paper and pop the graphite
+    sketch = cv2.convertScaleAbs(sketch, alpha=contrast, beta=brightness)
+    
     return sketch
 
 
@@ -694,9 +648,9 @@ def sketch_effect(image_path: str | Path, **kwargs: Any) -> np.ndarray:
     Pipeline
     --------
     - Read image once from disk.
-    - Optionally apply CLAHE for local contrast.
-    - Apply Gaussian blur and Canny edge detection.
-    - Apply color dodge blending between grayscale and blurred inverse.
+    - Convert to grayscale and invert.
+    - Apply Gaussian blur to the inverted image.
+    - Apply color dodge blending to simulate natural graphite shading.
 
     Parameters
     ----------
@@ -704,7 +658,7 @@ def sketch_effect(image_path: str | Path, **kwargs: Any) -> np.ndarray:
         Path to the input image.
     **kwargs:
         Advanced parameters forwarded to :func:`_sketch_from_array`,
-        such as ``use_clahe`` or Canny thresholds.
+        such as ``blur_ksize``, ``contrast``, or ``brightness``.
 
     Returns
     -------
@@ -715,7 +669,6 @@ def sketch_effect(image_path: str | Path, **kwargs: Any) -> np.ndarray:
     sketch = _sketch_from_array(image, **kwargs)
 
     return sketch
-
 
 def pencil_color_effect(
     image_path: str | Path,
@@ -871,6 +824,38 @@ def encode_image_to_png(image: np.ndarray) -> bytes:
     return buffer.tobytes()
 
 
+def grayscale_noir(image_path: str | Path, **kwargs: Any) -> np.ndarray:
+    """Produce a dramatic high-contrast grayscale image."""
+    image = read_image(image_path)
+    image = _validate_bgr_image(image, "grayscale_noir")
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    gray = cv2.convertScaleAbs(gray, alpha=1.5, beta=-30)
+    return cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
+
+
+def sepia_effect(image_path: str | Path, **kwargs: Any) -> np.ndarray:
+    """Produce a vintage warm-toned sepia image."""
+    image = read_image(image_path)
+    image = _validate_bgr_image(image, "sepia_effect")
+    kernel = np.array([[0.131, 0.534, 0.272],
+                       [0.168, 0.686, 0.349],
+                       [0.189, 0.769, 0.393]])
+    sepia = cv2.transform(image, kernel)
+    return np.clip(sepia, 0, 255).astype(np.uint8)
+
+
+def invert_neon(image_path: str | Path, **kwargs: Any) -> np.ndarray:
+    """Produce an inverted cyberpunk glow effect."""
+    image = read_image(image_path)
+    image = _validate_bgr_image(image, "invert_neon")
+    inverted = cv2.bitwise_not(image)
+    hsv = cv2.cvtColor(inverted, cv2.COLOR_BGR2HSV).astype(np.float32)
+    h, s, v = cv2.split(hsv)
+    s = s * 1.5
+    hsv = cv2.merge((h, np.clip(s, 0, 255), v))
+    return cv2.cvtColor(hsv.astype(np.uint8), cv2.COLOR_HSV2BGR)
+
+
 if __name__ == "__main__":
     """
     Small local test harness.
@@ -889,3 +874,66 @@ if __name__ == "__main__":
         cv2.imwrite("debug_out_cartoon.png", cartoon_img)
         cv2.imwrite("debug_out_sketch.png", sketch_img)
         cv2.imwrite("debug_out_pencil_color.png", pencil_img)
+def sepia_effect(image_path: str | Path) -> np.ndarray:
+    """Apply a vintage sepia filter to the image."""
+    image = read_image(image_path)
+    image = _validate_bgr_image(image, "sepia_effect")
+    
+    # Standard Sepia transformation matrix
+    kernel = np.array([[0.272, 0.534, 0.131],
+                       [0.349, 0.686, 0.168],
+                       [0.393, 0.769, 0.189]])
+    sepia = cv2.transform(image, kernel)
+    return np.clip(sepia, 0, 255).astype(np.uint8)
+
+def invert_neon(image_path: str | Path) -> np.ndarray:
+    """Create a high-contrast inverted neon glow style."""
+    image = read_image(image_path)
+    image = _validate_bgr_image(image, "invert_neon")
+    
+    inverted = cv2.bitwise_not(image)
+    return cv2.GaussianBlur(inverted, (3, 3), 0)
+
+def grayscale_noir(image_path: str | Path) -> np.ndarray:
+    """Convert the image to a high-contrast cinematic grayscale Noir."""
+    image = read_image(image_path)
+    image = _validate_bgr_image(image, "grayscale_noir")
+    
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    # Convert back to 3-channel BGR so it remains compatible with your dashboard preview
+    return cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
+
+def apply_watermark(image: np.ndarray, text: str = "ARTIFY AI PREVIEW") -> np.ndarray:
+    """Adds a semi-transparent text watermark for free previews.
+    Accepts both BGR (3-channel) and grayscale (2D) images.
+    Always returns a 3-channel BGR image.
+    """
+    if not isinstance(image, np.ndarray):
+        raise ValueError("apply_watermark expects a NumPy array.")
+
+    # Convert grayscale (2D or single-channel 3D) to BGR so putText works
+    if image.ndim == 2:
+        image = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
+    elif image.ndim == 3 and image.shape[2] == 1:
+        image = cv2.cvtColor(image[:, :, 0], cv2.COLOR_GRAY2BGR)
+    elif image.ndim == 3 and image.shape[2] != 3:
+        raise ValueError(f"apply_watermark: unsupported image shape {image.shape}.")
+
+    if image.dtype != np.uint8:
+        image = image.astype(np.uint8)
+
+    overlay = image.copy()
+    h, w = image.shape[:2]
+
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    # Scale font size based on image resolution
+    font_scale = max(1, min(h, w) // 500)
+    thickness = max(2, font_scale * 2)
+
+    text_size = cv2.getTextSize(text, font, font_scale, thickness)[0]
+    text_x = (w - text_size[0]) // 2
+    text_y = (h + text_size[1]) // 2
+
+    cv2.putText(overlay, text, (text_x, text_y), font, font_scale, (255, 255, 255), thickness, cv2.LINE_AA)
+    # Blend with 40% opacity
+    return cv2.addWeighted(overlay, 0.4, image, 0.6, 0)
