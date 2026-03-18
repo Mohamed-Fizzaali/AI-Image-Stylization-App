@@ -1451,9 +1451,11 @@ with hero_showcase_shell:
                 key="hero_get_started",
             )
             if start_creating:
-                if st.session_state["authenticated"]:
+                if st.session_state.get("authenticated"):
                     st.switch_page("pages/dashboard.py")
                 else:
+                    # Scroll down to auth or set state. Here we can just switch page to dashboard, it will redirect if needed.
+                    # But actually if they click, we want to open the modal or let them use the inline form.
                     st.session_state.auth_modal_open = True
                     request_auth_modal = True
 
@@ -1486,8 +1488,19 @@ with hero_showcase_shell:
                 unsafe_allow_html=True,
             )
 
-if request_auth_modal:
-    open_auth_modal()
+if not st.session_state.get("authenticated"):
+    st.markdown("<div style='height: 2.2rem;' id='auth-section'></div>", unsafe_allow_html=True)
+    auth_container = st.container(key="inline_auth_shell")
+    with auth_container:
+        render_auth_forms()
+    if request_auth_modal:
+        # User clicked a button, optionally also show modal or focus.
+        # But since we have it inline, we don't strictly need the modal unless preferred.
+        # We will keep the modal for clicks on 'Get Started'.
+        open_auth_modal()
+else:
+    if request_auth_modal:
+        open_auth_modal()
 
 st.markdown("<div style='height: 2.2rem;'></div>", unsafe_allow_html=True)
 
