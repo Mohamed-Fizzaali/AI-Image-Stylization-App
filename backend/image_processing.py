@@ -12,6 +12,7 @@ from typing import Any, Dict, List, Optional
 
 import cv2
 import numpy as np
+from PIL import Image, ImageDraw, ImageFont
 
 _READ_CACHE_MAX_SIZE: int = 8
 _KMEANS_MAX_SAMPLE_SIZE: int = 400
@@ -527,7 +528,7 @@ def color_quantization(image: np.ndarray, k: int = 8) -> np.ndarray:
 
 def classic_cartoon(image_path: str | Path) -> np.ndarray:
     """
-    Produces a high-quality 'Studio Cartoon' effect using Gaussian Pyramids 
+    Produces a high-quality 'Studio Cartoon' effect using Gaussian Pyramids
     for algorithmic acceleration and morphological transformations for edges.
     """
     # 1. Use your robust caching reader and validator
@@ -542,7 +543,7 @@ def classic_cartoon(image_path: str | Path) -> np.ndarray:
     # -------------------------------------------------------------------------
     color_tensor = image.copy()
     num_downsamples = 2
-    
+
     # Downsample to drastically reduce bilateral filter complexity
     for _ in range(num_downsamples):
         color_tensor = cv2.pyrDown(color_tensor)
@@ -554,7 +555,7 @@ def classic_cartoon(image_path: str | Path) -> np.ndarray:
     # Upsample back to approximate original size
     for _ in range(num_downsamples):
         color_tensor = cv2.pyrUp(color_tensor)
-        
+
     # Force exact dimension match (pyrUp can shift odd-pixel dimensions by 1)
     color_tensor = cv2.resize(color_tensor, (w, h), interpolation=cv2.INTER_CUBIC)
 
@@ -569,14 +570,14 @@ def classic_cartoon(image_path: str | Path) -> np.ndarray:
     # -------------------------------------------------------------------------
     grayscale = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     blurred_gray = cv2.medianBlur(grayscale, 7)
-    
+
     edges = cv2.adaptiveThreshold(
-        blurred_gray, 255, 
-        cv2.ADAPTIVE_THRESH_MEAN_C, 
-        cv2.THRESH_BINARY, 
+        blurred_gray, 255,
+        cv2.ADAPTIVE_THRESH_MEAN_C,
+        cv2.THRESH_BINARY,
         blockSize=9, C=2
     )
-                                  
+
     # Apply Morphological Closing to clean the binary mask
     kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
     clean_edges = cv2.morphologyEx(edges, cv2.MORPH_CLOSE, kernel)
@@ -619,25 +620,25 @@ def _sketch_from_array(
         Single-channel grayscale sketch.
     """
     image = _validate_bgr_image(image, "_sketch_from_array")
-    
+
     # 1. Convert to grayscale
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    
+
     # 2. Invert the grayscale image
     inverted = cv2.bitwise_not(gray)
-    
+
     # 3. Apply a strong Gaussian blur to the inverted image.
     if blur_ksize % 2 == 0:
         blur_ksize += 1
     blurred = cv2.GaussianBlur(inverted, (blur_ksize, blur_ksize), sigmaX=0, sigmaY=0)
-    
+
     # 4. Color Dodge Blend
     inv_blurred = cv2.bitwise_not(blurred)
     sketch = cv2.divide(gray, inv_blurred, scale=256.0)
-    
+
     # 5. Clean up the paper and pop the graphite
     sketch = cv2.convertScaleAbs(sketch, alpha=contrast, beta=brightness)
-    
+
     return sketch
 
 
@@ -874,7 +875,7 @@ def sepia_effect(image_path: str | Path) -> np.ndarray:
     """Apply a vintage sepia filter to the image."""
     image = read_image(image_path)
     image = _validate_bgr_image(image, "sepia_effect")
-    
+
     # Standard Sepia transformation matrix
     kernel = np.array([[0.272, 0.534, 0.131],
                        [0.349, 0.686, 0.168],
@@ -886,7 +887,7 @@ def invert_neon(image_path: str | Path) -> np.ndarray:
     """Create a high-contrast inverted neon glow style."""
     image = read_image(image_path)
     image = _validate_bgr_image(image, "invert_neon")
-    
+
     inverted = cv2.bitwise_not(image)
     return cv2.GaussianBlur(inverted, (3, 3), 0)
 
@@ -894,20 +895,22 @@ def grayscale_noir(image_path: str | Path) -> np.ndarray:
     """Convert the image to a high-contrast cinematic grayscale Noir."""
     image = read_image(image_path)
     image = _validate_bgr_image(image, "grayscale_noir")
-    
+
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     # Convert back to 3-channel BGR so it remains compatible with your dashboard preview
     return cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
 
-def apply_watermark(image: np.ndarray, text: str = "ARTIFY AI PREVIEW") -> np.ndarray:
-    """Adds a semi-transparent text watermark for free previews.
+def apply_watermark(image: np.ndarray, text: str = "ARTIFY AI PREVIEW", watermark_path: str = "assets/watermark.png") -> np.ndarray:
+    """Adds a watermark to the image.
+    It attempts to load a watermark image file. If missing, it falls back to a
+    PIL-based text watermark.
     Accepts both BGR (3-channel) and grayscale (2D) images.
     Always returns a 3-channel BGR image.
     """
     if not isinstance(image, np.ndarray):
         raise ValueError("apply_watermark expects a NumPy array.")
 
-    # Convert grayscale (2D or single-channel 3D) to BGR so putText works
+    # Convert grayscale (2D or single-channel 3D) to BGR
     if image.ndim == 2:
         image = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
     elif image.ndim == 3 and image.shape[2] == 1:
@@ -918,18 +921,79 @@ def apply_watermark(image: np.ndarray, text: str = "ARTIFY AI PREVIEW") -> np.nd
     if image.dtype != np.uint8:
         image = image.astype(np.uint8)
 
-    overlay = image.copy()
     h, w = image.shape[:2]
 
-    font = cv2.FONT_HERSHEY_SIMPLEX
-    # Scale font size based on image resolution
-    font_scale = max(1, min(h, w) // 500)
-    thickness = max(2, font_scale * 2)
+    # Try to load the watermark image
+    wm_img = None
+    if Path(watermark_path).exists():
+        wm_img = cv2.imread(watermark_path, cv2.IMREAD_UNCHANGED)
 
-    text_size = cv2.getTextSize(text, font, font_scale, thickness)[0]
-    text_x = (w - text_size[0]) // 2
-    text_y = (h + text_size[1]) // 2
+    if wm_img is not None:
+        # Resize watermark to fit within the image while maintaining aspect ratio
+        wm_h, wm_w = wm_img.shape[:2]
+        target_w = w // 3
+        scale = target_w / wm_w
+        target_h = int(wm_h * scale)
+        wm_img = cv2.resize(wm_img, (target_w, target_h), interpolation=cv2.INTER_AREA)
 
-    cv2.putText(overlay, text, (text_x, text_y), font, font_scale, (255, 255, 255), thickness, cv2.LINE_AA)
-    # Blend with 40% opacity
-    return cv2.addWeighted(overlay, 0.4, image, 0.6, 0)
+        # Overlay the watermark image on the bottom right
+        x_offset = w - target_w - 20
+        y_offset = h - target_h - 20
+
+        if len(wm_img.shape) >= 3 and wm_img.shape[2] == 4:
+            # Handle alpha channel
+            alpha_wm = wm_img[:, :, 3] / 255.0
+            alpha_img = 1.0 - alpha_wm
+            for c in range(0, 3):
+                image[y_offset:y_offset+target_h, x_offset:x_offset+target_w, c] = (
+                    alpha_wm * wm_img[:, :, c] +
+                    alpha_img * image[y_offset:y_offset+target_h, x_offset:x_offset+target_w, c]
+                )
+        else:
+            image[y_offset:y_offset+target_h, x_offset:x_offset+target_w] = wm_img
+        return image
+    else:
+        # Fallback to PIL text watermark
+        try:
+            from PIL import Image, ImageDraw, ImageFont
+            pil_img = Image.fromarray(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+            # Create a transparent overlay
+            overlay = Image.new('RGBA', pil_img.size, (0, 0, 0, 0))
+            draw = ImageDraw.Draw(overlay)
+
+            # Calculate font size based on image height
+            font_size = max(10, h // 20)
+            try:
+                font = ImageFont.truetype("arial.ttf", font_size)
+            except IOError:
+                font = ImageFont.load_default()
+
+            # Get text bounding box
+            left, top, right, bottom = draw.textbbox((0, 0), text, font=font)
+            text_width = right - left
+            text_height = bottom - top
+
+            # Center the text
+            x = (w - text_width) // 2
+            y = (h - text_height) // 2
+
+            # Draw semi-transparent white text
+            draw.text((x, y), text, font=font, fill=(255, 255, 255, 100))
+
+            # Combine image and overlay
+            pil_img = pil_img.convert("RGBA")
+            pil_img = Image.alpha_composite(pil_img, overlay)
+
+            # Convert back to OpenCV BGR
+            pil_img = pil_img.convert("RGB")
+            return cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR)
+        except Exception as e:
+            # Absolute fallback if PIL fails
+            overlay = image.copy()
+            font_scale = max(1, min(h, w) // 500)
+            thickness = max(2, font_scale * 2)
+            text_size = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, font_scale, thickness)[0]
+            text_x = (w - text_size[0]) // 2
+            text_y = (h + text_size[1]) // 2
+            cv2.putText(overlay, text, (text_x, text_y), cv2.FONT_HERSHEY_SIMPLEX, font_scale, (255, 255, 255), thickness, cv2.LINE_AA)
+            return cv2.addWeighted(overlay, 0.4, image, 0.6, 0)

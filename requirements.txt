@@ -8,3 +8,4 @@ numpy
 authlib
 python-dotenv
 requests
+razorpay
